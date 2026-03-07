@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Copilot Eval Configuration",
+  "description": "Configuration file for copilot-eval eval cases with optional setup/teardown hooks.",
+  "oneOf": [
+    { "$ref": "#/definitions/evalsFile" },
+    {
+      "type": "array",
+      "description": "Legacy format: a bare array of eval cases.",
+      "items": { "$ref": "#/definitions/evalCase" }
+    }
+  ],
+  "definitions": {
+    "evalsFile": {
+      "type": "object",
+      "required": ["evals"],
+      "additionalProperties": false,
+      "properties": {
+        "$schema": {
+          "type": "string",
+          "description": "Path or URL to the JSON schema for editor validation."
+        },
+        "scripts": {
+          "$ref": "#/definitions/evalScripts",
+          "description": "Global setup/teardown shell commands. Setup runs once before all evals (in the project directory). Teardown runs once after all evals. Supports placeholders: {{runId}}, {{runDir}}, {{projectDir}}. Variables also available as COPILOT_EVAL_* env vars."
+        },
+        "evals": {
+          "type": "array",
+          "description": "List of eval cases to run.",
+          "items": { "$ref": "#/definitions/evalCase" }
+        }
+      }
+    },
+    "evalScripts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "setup": {
+          "type": "string",
+          "description": "Shell command to run before. Supports {{placeholder}} syntax and COPILOT_EVAL_* env vars."
+        },
+        "teardown": {
+          "type": "string",
+          "description": "Shell command to run after. Supports {{placeholder}} syntax and COPILOT_EVAL_* env vars."
+        },
+        "setup:eval": {
+          "type": "string",
+          "description": "Default shell command to run before each eval. Overridden by per-eval scripts.setup. Supports {{placeholder}} syntax and COPILOT_EVAL_* env vars."
+        },
+        "teardown:eval": {
+          "type": "string",
+          "description": "Default shell command to run after each eval. Overridden by per-eval scripts.teardown. Supports {{placeholder}} syntax and COPILOT_EVAL_* env vars."
+        }
+      }
+    },
+    "evalCase": {
+      "type": "object",
+      "required": ["title", "turns"],
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Short descriptive title for the eval case."
+        },
+        "category": {
+          "type": "string",
+          "description": "Optional category for filtering evals."
+        },
+        "scripts": {
+          "$ref": "#/definitions/evalScripts",
+          "description": "Per-eval setup/teardown shell commands. Runs in the project directory. Supports placeholders: {{runId}}, {{runDir}}, {{projectDir}}, {{workspaceId}}, {{workspaceDir}} (alias: {{workspacePath}}). Variables also available as COPILOT_EVAL_* env vars."
+        },
+        "turns": {
+          "type": "array",
+          "description": "One or more conversation turns for this eval.",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/evalTurn" }
+        }
+      }
+    },
+    "evalTurn": {
+      "type": "object",
+      "required": ["prompt", "expected"],
+      "additionalProperties": false,
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "description": "The user prompt to send to the Copilot CLI."
+        },
+        "expected": {
+          "type": "string",
+          "description": "Description of the expected behavior for judging."
+        }
+      }
+    }
+  }
+}

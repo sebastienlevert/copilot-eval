@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skill Eval Dashboard</title>
+<link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/editor/editor.main.min.css">
+<script type="module" src="https://unpkg.com/@fluentui/web-components@2.6.1"></script>
+<script>
+// Theme: detect system preference, apply immediately to avoid flash
+(function() {
+  const stored = localStorage.getItem('theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const theme = stored || (prefersDark ? 'dark' : 'light');
+  document.documentElement.setAttribute('data-theme', theme);
+})();
+</script>
+<style>
+  /* === Fluent v9 light-theme tokens (default) === */
+  :root, [data-theme="light"] {
+    --pass: #107c10; --partial: #c4a000; --fail: #d13438; --error: #7160e8;
+    --colorNeutralBackground1: #ffffff; --colorNeutralBackground2: #fafafa; --colorNeutralBackground3: #f5f5f5;
+    --colorNeutralBackground1Hover: #f5f5f5; --colorNeutralBackground1Pressed: #ebebeb;
+    --colorNeutralForeground1: #242424; --colorNeutralForeground2: #424242; --colorNeutralForeground3: #616161;
+    --colorNeutralStroke1: #d1d1d1; --colorNeutralStroke2: #e0e0e0;
+    --colorNeutralStrokeAccessible: #616161;
+    --colorBrandBackground: #0f6cbd; --colorBrandBackgroundHover: #115ea3;
+    --colorBrandForeground1: #0f6cbd;
+    --colorSubtleBackground: transparent; --colorSubtleBackgroundHover: #f5f5f5;
+    --colorSubtleBackgroundPressed: #ebebeb;
+    --shadow2: 0 1px 2px rgba(0,0,0,0.12); --shadow4: 0 2px 4px rgba(0,0,0,0.14); --shadow8: 0 4px 8px rgba(0,0,0,0.14);
+    --borderRadiusSmall: 4px; --borderRadiusMedium: 8px; --borderRadiusLarge: 12px; --borderRadiusXLarge: 16px;
+    --fontSizeBase100: 0.625rem; --fontSizeBase200: 0.75rem; --fontSizeBase300: 0.875rem; --fontSizeBase400: 1rem; --fontSizeBase500: 1.25rem;
+    --fontWeightRegular: 400; --fontWeightSemibold: 600; --fontWeightBold: 700;
+    --lineHeightBase300: 1.4; --lineHeightBase400: 1.5;
+    --spacingHorizontalXS: 4px; --spacingHorizontalS: 8px; --spacingHorizontalM: 12px; --spacingHorizontalL: 16px; --spacingHorizontalXL: 20px;
+    --spacingVerticalXS: 4px; --spacingVerticalS: 8px; --spacingVerticalM: 12px; --spacingVerticalL: 16px; --spacingVerticalXL: 20px;
+    --bg: var(--colorNeutralBackground1); --surface: var(--colorNeutralBackground2); --surface2: var(--colorNeutralBackground3);
+    --border: var(--colorNeutralStroke2); --border-strong: var(--colorNeutralStroke1);
+    --text: var(--colorNeutralForeground1); --muted: var(--colorNeutralForeground3); --text2: var(--colorNeutralForeground2);
+    --monacoTheme: vs;
+    --badgePassBg: rgba(16,124,16,0.1); --badgePartialBg: rgba(196,160,0,0.12); --badgeFailBg: rgba(209,52,56,0.1); --badgeErrorBg: rgba(113,96,232,0.1);
+    --accentButtonText: #fff;
+  }
+
+  /* === Fluent v9 dark-theme tokens === */
+  [data-theme="dark"] {
+    --pass: #6ccb5f; --partial: #f2c661; --fail: #f36d6d; --error: #c89aff;
+    --colorNeutralBackground1: #1b1b1f; --colorNeutralBackground2: #27272b; --colorNeutralBackground3: #313135;
+    --colorNeutralBackground1Hover: #323236; --colorNeutralBackground1Pressed: #3b3b3f;
+    --colorNeutralForeground1: #f5f5f5; --colorNeutralForeground2: #d6d6d6; --colorNeutralForeground3: #adadad;
+    --colorNeutralStroke1: #404044; --colorNeutralStroke2: #333337;
+    --colorNeutralStrokeAccessible: #8a8a8a;
+    --colorBrandBackground: #479ef5; --colorBrandBackgroundHover: #62abf5;
+    --colorBrandForeground1: #479ef5;
+    --colorSubtleBackground: transparent; --colorSubtleBackgroundHover: rgba(255,255,255,0.05);
+    --colorSubtleBackgroundPressed: rgba(255,255,255,0.03);
+    --shadow2: 0 1px 2px rgba(0,0,0,0.28); --shadow4: 0 2px 4px rgba(0,0,0,0.28); --shadow8: 0 4px 8px rgba(0,0,0,0.28);
+    --bg: var(--colorNeutralBackground1); --surface: var(--colorNeutralBackground2); --surface2: var(--colorNeutralBackground3);
+    --border: var(--colorNeutralStroke2); --border-strong: var(--colorNeutralStroke1);
+    --text: var(--colorNeutralForeground1); --muted: var(--colorNeutralForeground3); --text2: var(--colorNeutralForeground2);
+    --monacoTheme: vs-dark;
+    --badgePassBg: rgba(108,203,95,0.15); --badgePartialBg: rgba(242,198,97,0.15); --badgeFailBg: rgba(243,109,109,0.15); --badgeErrorBg: rgba(200,154,255,0.15);
+    --accentButtonText: #000;
+  }
+
+  /* === Reset & base === */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  .header-row { display: flex; align-items: center; justify-content: space-between; gap: var(--spacingHorizontalM); margin-bottom: var(--spacingVerticalXS); }
+  .header-row h1 { margin-bottom: 0; }
+  .theme-toggle { background: var(--surface); border: 1px solid var(--border); border-radius: var(--borderRadiusMedium); width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1.125rem; line-height: 1; transition: background 0.15s, border-color 0.15s; flex-shrink: 0; }
+  .theme-toggle:hover { background: var(--colorSubtleBackgroundHover); border-color: var(--border-strong); }
+  body {
+    font-family: 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    padding: var(--spacingVerticalXL) var(--spacingHorizontalXL);
+    font-size: var(--fontSizeBase300); line-height: var(--lineHeightBase300);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: var(--fontSizeBase500); font-weight: var(--fontWeightSemibold); margin-bottom: var(--spacingVerticalXS); }
+  .meta { color: var(--muted); font-size: var(--fontSizeBase200); margin-bottom: var(--spacingVerticalL); }
+
+  /* === Summary cards === */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: var(--spacingHorizontalM); margin-bottom: var(--spacingVerticalXL); }
+  fluent-card.stat-card { display: block; background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: var(--borderRadiusLarge); padding: var(--spacingVerticalL) var(--spacingHorizontalL); text-align: center; box-shadow: var(--shadow4); contain: none; --card-height: auto; --card-width: auto; color: var(--text) !important; }
+  fluent-card.stat-card.clickable-card { cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease; }
+  fluent-card.stat-card.clickable-card:hover { border-color: var(--border-strong) !important; background: var(--colorSubtleBackgroundHover) !important; }
+  fluent-card.stat-card.clickable-card:active { background: var(--colorSubtleBackgroundPressed) !important; }
+  fluent-card.stat-card.card-active { border-color: var(--colorBrandBackground) !important; box-shadow: 0 0 0 1px var(--colorBrandBackground); }
+  fluent-card.stat-card .value { font-size: 1.75rem; font-weight: var(--fontWeightBold); font-variant-numeric: tabular-nums; color: var(--text); }
+  fluent-card.stat-card .label { color: var(--muted); font-size: var(--fontSizeBase100); text-transform: uppercase; letter-spacing: 0.06em; margin-top: var(--spacingVerticalXS); font-weight: var(--fontWeightSemibold); }
+
+  /* === Progress bar === */
+  .bar-container { display: flex; height: 8px; border-radius: var(--borderRadiusSmall); overflow: hidden; margin-bottom: var(--spacingVerticalXL); background: var(--surface); }
+  .bar-segment { transition: width 0.3s ease; }
+
+  /* === Filter pills (fluent-button) === */
+  .filter-bar { display: flex; gap: var(--spacingHorizontalS); margin-bottom: var(--spacingVerticalL); align-items: center; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 2px; }
+  .filter-bar::-webkit-scrollbar { display: none; }
+  .filter-bar fluent-button { --neutral-fill-rest: transparent; --neutral-fill-hover: var(--colorSubtleBackgroundHover); --neutral-fill-active: var(--colorSubtleBackgroundPressed); --neutral-stroke-rest: var(--border); --neutral-foreground-rest: var(--muted); --neutral-fill-stealth-rest: transparent; --neutral-fill-stealth-hover: var(--colorSubtleBackgroundHover); flex-shrink: 0; }
+  .filter-bar fluent-button::part(control) { font-size: var(--fontSizeBase200); font-weight: var(--fontWeightSemibold); min-height: 32px; border-radius: var(--borderRadiusMedium); padding: 6px 14px; white-space: nowrap; }
+  .filter-bar fluent-button[appearance="accent"]::part(control) { background: var(--colorBrandBackground); color: var(--accentButtonText); border-color: var(--colorBrandBackground); }
+  .filter-label { color: var(--muted); font-size: var(--fontSizeBase100); text-transform: uppercase; letter-spacing: 0.06em; font-weight: var(--fontWeightSemibold); align-self: center; margin-right: var(--spacingHorizontalXS); white-space: nowrap; }
+
+  /* === Data table === */
+  .table-wrap { border-radius: var(--borderRadiusMedium); overflow: hidden; background: var(--surface); border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  col.col-index { width: 56px; }
+  col.col-category { width: 180px; }
+  col.col-verdict { width: 100px; }
+  thead { position: sticky; top: 0; z-index: 1; }
+  th { background: var(--surface2); text-align: left; padding: var(--spacingVerticalS) var(--spacingHorizontalL); font-size: var(--fontSizeBase100); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: var(--fontWeightSemibold); border-bottom: 2px solid var(--border); }
+  td { padding: var(--spacingVerticalS) var(--spacingHorizontalL); border-bottom: 1px solid var(--border); vertical-align: middle; font-size: var(--fontSizeBase300); color: var(--text); }
+  td.cell-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  tr.clickable { cursor: pointer; transition: background 0.12s ease; }
+  tr.clickable:hover td { background: var(--colorSubtleBackgroundHover); }
+  tr.clickable:active td { background: var(--colorSubtleBackgroundPressed); }
+  tr.row-expanded td { background: var(--surface2); border-bottom: none; }
+  tr.row-expanded:hover td { background: var(--surface2); }
+  .detail-row td { padding: 0 !important; border-bottom: 1px solid var(--border) !important; background: var(--bg) !important; }
+  fluent-badge { --badge-fill-highlight: transparent; border-radius: 9999px; font-size: var(--fontSizeBase200); font-weight: var(--fontWeightSemibold); }
+  fluent-badge::part(control) { border-radius: 9999px; padding: 2px 10px; line-height: 1.5; }
+  fluent-badge.badge-pass::part(control) { background: var(--badgePassBg); color: var(--pass); }
+  fluent-badge.badge-partial::part(control) { background: var(--badgePartialBg); color: var(--partial); }
+  fluent-badge.badge-fail::part(control) { background: var(--badgeFailBg); color: var(--fail); }
+  fluent-badge.badge-error::part(control) { background: var(--badgeErrorBg); color: var(--error); }
+  .hidden { display: none; }
+
+  /* === Detail panel === */
+  .detail-panel { padding: var(--spacingVerticalL) var(--spacingHorizontalXL); background: var(--bg); }
+  .detail-panel h3 { font-size: var(--fontSizeBase200); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: var(--spacingVerticalS); font-weight: var(--fontWeightSemibold); }
+  .detail-panel h3.success-heading { color: var(--pass); }
+  .detail-panel h3.failure-heading { color: var(--fail); }
+  .detail-section { margin-bottom: var(--spacingVerticalL); }
+  .detail-section:last-child { margin-bottom: 0; }
+  .detail-section ul { list-style: none; padding: 0; margin: 0; }
+  .detail-section li { padding: 3px 0; font-size: var(--fontSizeBase300); }
+  .detail-section li.met::before { content: '✓ '; color: var(--pass); font-weight: var(--fontWeightBold); }
+  .detail-section li.missed::before { content: '✗ '; color: var(--fail); font-weight: var(--fontWeightBold); }
+  .detail-section li.met, .detail-section li.missed { color: var(--text2); }
+  .detail-reasoning { margin-top: var(--spacingVerticalM); font-size: var(--fontSizeBase300); color: var(--muted); font-style: italic; line-height: var(--lineHeightBase400); }
+  .detail-error { color: var(--fail); font-size: var(--fontSizeBase300); }
+  .empty-note { color: var(--muted); font-size: var(--fontSizeBase200); font-style: italic; }
+
+  /* === Log viewer (fluent-tabs) === */
+  fluent-tabs.log-tabs { background: transparent !important; }
+  fluent-accordion.log-accordion { margin-top: var(--spacingVerticalL); }
+  fluent-accordion.log-accordion > fluent-accordion-item { margin-bottom: 0; }
+  fluent-accordion.log-accordion fluent-accordion-item::part(heading) { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--borderRadiusMedium); min-height: 40px; }
+  fluent-accordion.log-accordion fluent-accordion-item[expanded]::part(heading) { border-radius: var(--borderRadiusMedium) var(--borderRadiusMedium) 0 0; border-bottom: none !important; }
+  fluent-accordion.log-accordion fluent-accordion-item::part(button) { background: transparent; color: var(--text2); padding: var(--spacingVerticalS) var(--spacingHorizontalL); font-size: var(--fontSizeBase200); font-weight: var(--fontWeightSemibold); }
+  fluent-accordion.log-accordion fluent-accordion-item::part(button):hover { background: transparent; }
+  fluent-accordion.log-accordion fluent-accordion-item::part(region) { background: var(--bg); border: 1px solid var(--border); border-top: none; border-radius: 0 0 var(--borderRadiusMedium) var(--borderRadiusMedium); padding: var(--spacingVerticalM); }
+  fluent-tabs.log-tabs::part(tablist) { border-bottom: 1px solid var(--border); }
+  fluent-tabs.log-tabs::part(activeIndicator) { background: var(--colorBrandBackground); height: 2px; border-radius: 1px; }
+  fluent-tabs.log-tabs fluent-tab { color: var(--muted) !important; font-size: var(--fontSizeBase200); font-weight: var(--fontWeightSemibold); padding: 8px 16px; cursor: pointer; background: transparent !important; border: none !important; }
+  fluent-tabs.log-tabs fluent-tab:hover { color: var(--text2) !important; }
+  fluent-tabs.log-tabs fluent-tab[aria-selected="true"] { color: var(--colorBrandBackground) !important; }
+  fluent-tabs.log-tabs fluent-tab-panel { padding: var(--spacingVerticalM) 0; background: transparent !important; }
+  fluent-tabs.log-tabs .editor-container { border: 1px solid var(--border); border-radius: var(--borderRadiusMedium); overflow: hidden; }
+  .editor-instance { height: 400px; }
+
+  /* === Turn accordion (Fluent web components) === */
+  fluent-accordion { width: 100%; }
+  fluent-accordion-item { margin-bottom: var(--spacingVerticalS); border-radius: var(--borderRadiusMedium); overflow: hidden; background: transparent !important; border: none !important; }
+  fluent-accordion-item::part(heading) { background: var(--surface); border: 1px solid var(--border); border-radius: var(--borderRadiusMedium); min-height: 44px; display: flex; align-items: center; }
+  fluent-accordion-item[expanded]::part(heading) { border-radius: var(--borderRadiusMedium) var(--borderRadiusMedium) 0 0; border-bottom: none !important; }
+  fluent-accordion-item::part(button) { background: transparent; color: var(--text2); padding: var(--spacingVerticalM) var(--spacingHorizontalL); overflow: hidden; display: flex; align-items: center; flex: 1; min-width: 0; }
+  fluent-accordion-item::part(button):hover { background: transparent; }
+  fluent-accordion-item::part(heading-content) { display: flex; width: 100%; min-width: 0; overflow: hidden; }
+  fluent-accordion-item::part(icon) { color: var(--muted); transform: scale(0.75); opacity: 0.6; transition: opacity 0.15s; flex-shrink: 0; background: transparent !important; fill: var(--muted); }
+  fluent-accordion-item:hover::part(icon) { opacity: 1; }
+  fluent-accordion-item::part(region) { background: var(--bg); border: 1px solid var(--border); border-top: none; border-radius: 0 0 var(--borderRadiusMedium) var(--borderRadiusMedium); padding: var(--spacingVerticalL) var(--spacingHorizontalL); }
+  .turn-heading { display: flex; align-items: center; gap: var(--spacingHorizontalM); width: 100%; min-width: 0; }
+  .turn-num { font-size: var(--fontSizeBase100); font-weight: var(--fontWeightBold); color: #fff; background: var(--colorBrandBackground); border-radius: 9999px; min-width: 1.375rem; height: 1.375rem; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .turn-prompt-preview { font-size: var(--fontSizeBase300); color: var(--text2); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .turn-header-counts { margin-left: auto; display: flex; gap: 6px; flex-shrink: 0; font-size: var(--fontSizeBase200); font-weight: var(--fontWeightSemibold); }
+  .turn-body-content { }
+  .turn-section { margin-bottom: var(--spacingVerticalM); }
+  .turn-section:last-child { margin-bottom: 0; }
+  .turn-section-label { font-size: var(--fontSizeBase100); font-weight: var(--fontWeightSemibold); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: var(--spacingVerticalXS); }
+  .turn-section-label.prompt-label { color: var(--text2); }
+  .turn-section-content { font-size: var(--fontSizeBase300); color: var(--text); line-height: var(--lineHeightBase400); }
+  .turn-section-content.expected-content { color: var(--muted); }
+  .turn-response-content { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--borderRadiusSmall); padding: var(--spacingVerticalM) var(--spacingHorizontalL); max-height: 400px; overflow: auto; white-space: pre-wrap; font-size: var(--fontSizeBase200); color: var(--text2); font-family: 'Cascadia Code', 'SF Mono', Monaco, Consolas, monospace; line-height: 1.5; }
+  .turn-judgment { padding-top: var(--spacingVerticalM); border-top: 1px solid var(--border); }
+
+  /* === Mobile card layout === */
+  @media (max-width: 768px) {
+    body { padding: var(--spacingVerticalL) var(--spacingHorizontalL); }
+    h1 { font-size: var(--fontSizeBase400); }
+    .cards { grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: var(--spacingHorizontalS); }
+    fluent-card.stat-card { padding: var(--spacingVerticalM) var(--spacingHorizontalS); border-radius: var(--borderRadiusMedium); }
+    fluent-card.stat-card .value { font-size: 1.25rem; }
+    fluent-card.stat-card .label { font-size: 0.5625rem; }
+    .filter-bar { flex-wrap: nowrap; }
+
+    /* Table → card list on mobile */
+    .table-wrap { box-shadow: none; background: none; border: none; border-radius: 0; }
+    table, thead, tbody, th, td, tr { display: block; }
+    thead { display: none; }
+    tr.clickable { background: var(--surface); border: 1px solid var(--border); border-radius: var(--borderRadiusMedium); margin-bottom: var(--spacingVerticalS); padding: var(--spacingVerticalM) var(--spacingHorizontalL); display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: auto auto; gap: var(--spacingVerticalXS) var(--spacingHorizontalM); align-items: center; }
+    tr.clickable td { padding: 0; border: none; }
+    tr.clickable td:nth-child(1) { grid-row: 1; grid-column: 1; font-size: var(--fontSizeBase200); color: var(--muted); font-weight: var(--fontWeightSemibold); }
+    tr.clickable td:nth-child(2) { grid-row: 2; grid-column: 1 / -1; font-size: var(--fontSizeBase100); color: var(--muted); }
+    tr.clickable td:nth-child(3) { grid-row: 1; grid-column: 2; font-weight: var(--fontWeightSemibold); font-size: var(--fontSizeBase300); white-space: normal; }
+    tr.clickable td:nth-child(4) { grid-row: 1; grid-column: 3; }
+    tr.clickable:hover td { background: none; }
+    .detail-row { margin-top: calc(-1 * var(--spacingVerticalS)); margin-bottom: var(--spacingVerticalS); }
+    .detail-row td { border-radius: 0 0 var(--borderRadiusMedium) var(--borderRadiusMedium); background: var(--surface) !important; border: 1px solid var(--border) !important; border-top: none !important; padding: 0 !important; }
+    .detail-panel { padding: var(--spacingVerticalM) var(--spacingHorizontalL); }
+    fluent-accordion-item::part(heading) { min-height: 48px; }
+    fluent-accordion-item::part(button) { padding: var(--spacingVerticalM) var(--spacingHorizontalM); }
+    fluent-accordion-item::part(region) { padding: var(--spacingVerticalM) var(--spacingHorizontalM); }
+    .turn-response-content { max-height: 250px; font-size: 0.6875rem; }
+    .editor-instance { height: 280px; }
+  }
+
+  @media (max-width: 480px) {
+    .cards { grid-template-columns: repeat(3, 1fr); }
+    fluent-card.stat-card .value { font-size: 1.125rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header-row">
+  <h1>🔬 Skill Eval Dashboard</h1>
+  <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme" title="Toggle light/dark theme">🌙</button>
+</div>
+<div class="meta" id="meta"></div>
+
+<div class="cards" id="cards"></div>
+<div class="bar-container" id="bar"></div>
+<div class="filter-bar" id="filters"></div>
+<div class="filter-bar" id="cat-filters"></div>
+<div class="table-wrap">
+<table>
+  <colgroup>
+    <col class="col-index">
+    <col class="col-category">
+    <col>
+    <col class="col-verdict">
+  </colgroup>
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Category</th>
+      <th>Title</th>
+      <th>Verdict</th>
+    </tr>
+  </thead>
+  <tbody id="tbody"></tbody>
+</table>
+</div>
+
+<script>
+async function loadData() {
+  const jsonFile = location.pathname.replace(/\.html$/, '.json');
+  const resp = await fetch(jsonFile);
+  if (!resp.ok) throw new Error(`Failed to load ${jsonFile}: ${resp.status}`);
+  return resp.json();
+}
+
+loadData().then(init).catch(err => {
+  document.body.innerHTML = `<h1 style="color:var(--fail)">Failed to load data</h1><p>${err.message}</p>`;
+});
+
+function init(data) {
+// Compute the base directory for log file paths (vscode:// URIs)
+const htmlPath = decodeURIComponent(location.pathname);
+const baseDir = htmlPath.substring(0, htmlPath.lastIndexOf('/'));
+
+const evals = data.evals;
+const total = evals.length;
+const pass = evals.filter(e => e.judgment?.verdict === 'pass').length;
+const partial = evals.filter(e => e.judgment?.verdict === 'partial').length;
+const fail = evals.filter(e => e.judgment?.verdict === 'fail').length;
+const errored = evals.filter(e => e.error).length;
+const noJudge = total - pass - partial - fail - errored;
+const avgScore = total ? (evals.reduce((s, e) => s + (e.judgment?.score ?? 0), 0) / total).toFixed(1) : '0';
+const passRate = total ? ((pass / total) * 100).toFixed(1) : '0';
+
+// Meta
+document.title = `Skill Eval — ${data.skill} — ${data.timestamp}`;
+document.getElementById('meta').innerHTML =
+  `<strong>${escHtml(data.skill)}</strong> &middot; ${escHtml(data.timestamp)} &middot; ${(data.totalDuration / 1000).toFixed(1)}s total`;
+
+// Cards
+document.getElementById('cards').innerHTML = [
+  { value: total, label: 'Total', filter: 'all' },
+  { value: pass, label: 'Passed', color: 'var(--pass)', filter: 'pass' },
+  { value: partial, label: 'Partial', color: 'var(--partial)', filter: 'partial' },
+  { value: fail, label: 'Failed', color: 'var(--fail)', filter: 'fail' },
+  { value: errored, label: 'Errors', color: 'var(--error)', filter: 'error' },
+  { value: avgScore, label: 'Avg Score' },
+  { value: passRate + '%', label: 'Pass Rate' },
+].map(c => {
+  const clickable = c.filter ? ' clickable-card' + (c.filter === 'all' ? ' card-active' : '') : '';
+  const dataAttr = c.filter ? ` data-card-filter="${c.filter}"` : '';
+  return `<fluent-card class="stat-card${clickable}"${dataAttr}><div class="value" ${c.color ? 'style="color:' + c.color + '"' : ''}>${c.value}</div><div class="label">${c.label}</div></fluent-card>`;
+}).join('');
+
+document.getElementById('cards').addEventListener('click', e => {
+  const card = e.target.closest('[data-card-filter]');
+  if (!card) return;
+  activeFilter = card.dataset.cardFilter;
+  document.querySelectorAll('#cards .clickable-card').forEach(c => c.classList.toggle('card-active', c.dataset.cardFilter === activeFilter));
+  document.querySelectorAll('#filters fluent-button').forEach(b => b.setAttribute('appearance', b.dataset.filter === activeFilter ? 'accent' : 'outline'));
+  renderTable();
+});
+
+// Bar
+const segments = [
+  { count: pass, color: 'var(--pass)' },
+  { count: partial, color: 'var(--partial)' },
+  { count: fail, color: 'var(--fail)' },
+  { count: errored, color: 'var(--error)' },
+  { count: noJudge, color: 'var(--border)' },
+];
+document.getElementById('bar').innerHTML = segments
+  .filter(s => s.count > 0)
+  .map(s => `<div class="bar-segment" style="width:${(s.count/total*100).toFixed(1)}%;background:${s.color}"></div>`)
+  .join('');
+
+// Verdict filters
+const verdicts = ['all', 'pass', 'partial', 'fail', 'error'];
+document.getElementById('filters').innerHTML = `<span class="filter-label">Status</span>` + verdicts
+  .map(v => `<fluent-button appearance="${v === 'all' ? 'accent' : 'outline'}" data-filter="${v}">${v === 'all' ? 'All' : v.charAt(0).toUpperCase() + v.slice(1)}</fluent-button>`)
+  .join('');
+
+let activeFilter = 'all';
+document.getElementById('filters').addEventListener('click', e => {
+  const btn = e.target.closest('fluent-button[data-filter]');
+  if (!btn) return;
+  activeFilter = btn.dataset.filter;
+  document.querySelectorAll('#filters fluent-button').forEach(b => b.setAttribute('appearance', b.dataset.filter === activeFilter ? 'accent' : 'outline'));
+  document.querySelectorAll('#cards .clickable-card').forEach(c => c.classList.toggle('card-active', c.dataset.cardFilter === activeFilter));
+  renderTable();
+});
+
+// Category filters
+const categories = [...new Set(evals.map(e => e.category || 'Uncategorized'))].sort();
+document.getElementById('cat-filters').innerHTML =
+  `<span class="filter-label">Category</span>` +
+  [`<fluent-button appearance="accent" data-cat="all">All</fluent-button>`]
+  .concat(categories.map(c => `<fluent-button appearance="outline" data-cat="${escHtml(c)}">${escHtml(c)}</fluent-button>`))
+  .join('');
+
+let activeCat = 'all';
+document.getElementById('cat-filters').addEventListener('click', e => {
+  const btn = e.target.closest('fluent-button[data-cat]');
+  if (!btn) return;
+  activeCat = btn.dataset.cat;
+  document.querySelectorAll('#cat-filters fluent-button').forEach(b => b.setAttribute('appearance', b.dataset.cat === activeCat ? 'accent' : 'outline'));
+  renderTable();
+});
+
+function getVerdict(ev) {
+  if (ev.error) return 'error';
+  return ev.judgment?.verdict || 'none';
+}
+
+function groupCriteriaByTurn(criteria, turnCount) {
+  const byTurn = {};
+  const general = [];
+  const turnRe = /^Turn\s+(\d+):\s*/i;
+  for (const c of criteria) {
+    const m = c.match(turnRe);
+    if (m) {
+      const idx = parseInt(m[1], 10) - 1;
+      if (idx >= 0 && idx < turnCount) {
+        (byTurn[idx] = byTurn[idx] || []).push(c.replace(turnRe, ''));
+        continue;
+      }
+    }
+    general.push(c);
+  }
+  return { byTurn, general };
+}
+
+function buildDetailPanel(ev) {
+  let html = `<div class="detail-panel">`;
+
+  const turns = ev.turns || [];
+  const met = ev.judgment?.criteria_met || [];
+  const missed = ev.judgment?.criteria_missed || [];
+  const metByTurn = groupCriteriaByTurn(met, turns.length);
+  const missedByTurn = groupCriteriaByTurn(missed, turns.length);
+
+  // Turns accordion
+  html += `<div class="detail-section"><h3>Turns (${turns.length})</h3>`;
+  html += `<fluent-accordion expand-mode="multi">`;
+  for (let i = 0; i < turns.length; i++) {
+    const hasResp = ev.turnResponses && ev.turnResponses[i];
+    const turnMet = metByTurn.byTurn[i] || [];
+    const turnMissed = missedByTurn.byTurn[i] || [];
+    html += `<fluent-accordion-item>`;
+    html += `<div slot="heading" class="turn-heading">`;
+    html += `<span class="turn-num">${i + 1}</span>`;
+    html += `<span class="turn-prompt-preview">${escHtml(turns[i].prompt)}</span>`;
+    if (turnMet.length || turnMissed.length) {
+      html += `<span class="turn-header-counts">`;
+      if (turnMet.length) html += `<span style="color:var(--pass)">${turnMet.length}✓</span>`;
+      if (turnMissed.length) html += `<span style="color:var(--fail)">${turnMissed.length}✗</span>`;
+      html += `</span>`;
+    }
+    html += `</div>`;
+    html += `<div class="turn-body-content">`;
+    html += `<div class="turn-section"><div class="turn-section-label prompt-label">Prompt</div><div class="turn-section-content">${escHtml(turns[i].prompt)}</div></div>`;
+    html += `<div class="turn-section"><div class="turn-section-label">Expected</div><div class="turn-section-content expected-content">${escHtml(turns[i].expected)}</div></div>`;
+    if (hasResp) {
+      html += `<div class="turn-section"><div class="turn-section-label">Response</div><div class="turn-response-content">${escHtml(ev.turnResponses[i])}</div></div>`;
+    }
+    if (turnMet.length) {
+      html += `<div class="turn-section turn-judgment"><div class="turn-section-label" style="color:var(--pass)">Successes (${turnMet.length})</div>`;
+      html += `<ul class="detail-section" style="margin:0">${turnMet.map(c => `<li class="met">${escHtml(c)}</li>`).join('')}</ul></div>`;
+    }
+    if (turnMissed.length) {
+      html += `<div class="turn-section turn-judgment"><div class="turn-section-label" style="color:var(--fail)">Failures (${turnMissed.length})</div>`;
+      html += `<ul class="detail-section" style="margin:0">${turnMissed.map(c => `<li class="missed">${escHtml(c)}</li>`).join('')}</ul></div>`;
+    }
+    html += `</div>`;
+    html += `</fluent-accordion-item>`;
+  }
+  html += `</fluent-accordion></div>`;
+
+  // General (non-turn-specific) criteria + error + reasoning at top level
+  if (ev.error) {
+    html += `<div class="detail-section"><div class="detail-error">Error: ${escHtml(ev.error)}</div></div>`;
+  } else if (ev.judgment) {
+    if (metByTurn.general.length) {
+      html += `<div class="detail-section"><h3 class="success-heading">General Successes (${metByTurn.general.length})</h3>`;
+      html += `<ul>${metByTurn.general.map(c => `<li class="met">${escHtml(c)}</li>`).join('')}</ul></div>`;
+    }
+    if (missedByTurn.general.length) {
+      html += `<div class="detail-section"><h3 class="failure-heading">General Failures (${missedByTurn.general.length})</h3>`;
+      html += `<ul>${missedByTurn.general.map(c => `<li class="missed">${escHtml(c)}</li>`).join('')}</ul></div>`;
+    }
+    if (ev.judgment.reasoning) {
+      html += `<div class="detail-reasoning">${escHtml(ev.judgment.reasoning)}</div>`;
+    }
+  }
+
+  // Log viewer wrapped in collapsible accordion (collapsed by default)
+  if (ev.sessionId) {
+    html += `<fluent-accordion class="log-accordion">`;
+    html += `<fluent-accordion-item>`;
+    html += `<span slot="heading">📋 Logs</span>`;
+    html += `<fluent-tabs class="log-tabs" id="log-tabs-${ev.index}" data-session-id="${ev.sessionId}" data-eval-idx="${ev.index}">`;
+    html += `<fluent-tab id="lt-session-${ev.index}">📋 Session Log</fluent-tab>`;
+    html += `<fluent-tab id="lt-response-${ev.index}">💬 Response Log</fluent-tab>`;
+    html += `<fluent-tab-panel><div class="editor-container"><div class="editor-instance" id="editor-session-${ev.index}"></div></div></fluent-tab-panel>`;
+    html += `<fluent-tab-panel><div class="editor-container"><div class="editor-instance" id="editor-response-${ev.index}"></div></div></fluent-tab-panel>`;
+    html += `</fluent-tabs>`;
+    html += `</fluent-accordion-item>`;
+    html += `</fluent-accordion>`;
+  }
+
+  html += `</div>`;
+  return html;
+}
+
+function renderTable() {
+  let filtered = evals;
+  if (activeFilter !== 'all') filtered = filtered.filter(e => getVerdict(e) === activeFilter);
+  if (activeCat !== 'all') filtered = filtered.filter(e => (e.category || 'Uncategorized') === activeCat);
+  document.getElementById('tbody').innerHTML = filtered.map(ev => {
+    const v = getVerdict(ev);
+    const badgeClass = 'badge-' + (v === 'none' ? 'error' : v);
+    const label = ev.error ? 'ERROR' : (ev.judgment?.verdict?.toUpperCase() || 'N/A');
+    const title = escHtml(ev.title);
+    const category = escHtml(ev.category || 'Uncategorized');
+
+    return `<tr class="clickable" data-eval-index="${ev.index}">
+      <td>${ev.index}</td>
+      <td>${category}</td>
+      <td class="cell-title">${title}</td>
+      <td><fluent-badge class="${badgeClass}">${label}</fluent-badge></td>
+    </tr>
+    <tr class="detail-row hidden" id="detail-row-${ev.index}">
+      <td colspan="4">${buildDetailPanel(ev)}</td>
+    </tr>`;
+  }).join('');
+
+  // Attach click handlers
+  document.querySelectorAll('tr.clickable').forEach(row => {
+    row.addEventListener('click', () => {
+      const idx = row.dataset.evalIndex;
+      const detailRow = document.getElementById('detail-row-' + idx);
+      const wasExpanded = !detailRow.classList.contains('hidden');
+      detailRow.classList.toggle('hidden');
+      row.classList.toggle('row-expanded', !wasExpanded);
+    });
+  });
+}
+
+function escHtml(s) {
+  if (!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+renderTable();
+} // end init
+
+// Monaco Editor setup
+const monacoEditors = {}; // editorId -> monaco editor instance
+const logCache = {}; // key -> content
+
+function getLogUrl(sessionId, type) {
+  return `logs/${sessionId}-${type}.log`;
+}
+
+async function fetchLog(sessionId, type) {
+  const key = `${sessionId}-${type}`;
+  if (logCache[key] !== undefined) return logCache[key];
+  try {
+    const resp = await fetch(getLogUrl(sessionId, type));
+    if (!resp.ok) throw new Error(`${resp.status}`);
+    logCache[key] = await resp.text();
+  } catch (e) {
+    logCache[key] = `// Failed to load ${type} log: ${e.message}`;
+  }
+  return logCache[key];
+}
+
+function getMonacoReady() {
+  return new Promise(resolve => {
+    if (window._monacoReady) return resolve();
+    window._monacoCallbacks = window._monacoCallbacks || [];
+    window._monacoCallbacks.push(resolve);
+  });
+}
+
+function currentMonacoTheme() {
+  return document.documentElement.getAttribute('data-theme') === 'dark' ? 'vs-dark' : 'vs';
+}
+
+async function ensureEditor(containerId, sessionId, logType) {
+  await getMonacoReady();
+  const container = document.getElementById(containerId);
+  if (!container || monacoEditors[containerId]) return;
+  const content = await fetchLog(sessionId, logType);
+  monacoEditors[containerId] = monaco.editor.create(container, {
+    value: content,
+    language: 'plaintext',
+    theme: currentMonacoTheme(),
+    readOnly: true,
+    minimap: { enabled: true },
+    scrollBeyondLastLine: false,
+    fontSize: 12,
+    lineNumbers: 'on',
+    wordWrap: 'on',
+    automaticLayout: true,
+  });
+}
+
+// Lazy-load editors when fluent-tabs change
+document.addEventListener('change', e => {
+  const tabs = e.target.closest('fluent-tabs.log-tabs');
+  if (!tabs) return;
+  e.stopPropagation();
+  const { sessionId, evalIdx } = tabs.dataset;
+  const activeTab = tabs.querySelector('fluent-tab[aria-selected="true"]');
+  if (!activeTab) return;
+  const logType = activeTab.id.includes('session') ? 'session' : 'response';
+  ensureEditor(`editor-${logType}-${evalIdx}`, sessionId, logType);
+});
+
+// Load session editor when log accordion is expanded
+document.addEventListener('click', e => {
+  const item = e.target.closest('fluent-accordion.log-accordion fluent-accordion-item');
+  if (!item) return;
+  // Wait a tick for the expanded attribute to update
+  requestAnimationFrame(() => {
+    if (!item.hasAttribute('expanded')) return;
+    const tabs = item.querySelector('fluent-tabs.log-tabs');
+    if (!tabs) return;
+    const { sessionId, evalIdx } = tabs.dataset;
+    ensureEditor(`editor-session-${evalIdx}`, sessionId, 'session');
+  });
+});
+
+// Theme toggle
+(function() {
+  const btn = document.getElementById('theme-toggle');
+  function updateIcon() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    btn.textContent = isDark ? '☀️' : '🌙';
+    btn.title = isDark ? 'Switch to light theme' : 'Switch to dark theme';
+  }
+  updateIcon();
+  btn.addEventListener('click', () => {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const next = isDark ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('theme', next);
+    updateIcon();
+    // Update all Monaco editors
+    if (window.monaco) {
+      monaco.editor.setTheme(next === 'dark' ? 'vs-dark' : 'vs');
+    }
+  });
+  // Listen for OS-level theme changes when no manual override
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+    if (localStorage.getItem('theme')) return;
+    const next = e.matches ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', next);
+    updateIcon();
+    if (window.monaco) monaco.editor.setTheme(next === 'dark' ? 'vs-dark' : 'vs');
+  });
+})();
+
+
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.min.js"></script>
+<script>
+require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
+require(['vs/editor/editor.main'], function () {
+  window._monacoReady = true;
+  (window._monacoCallbacks || []).forEach(cb => cb());
+});
+</script>
+</body>
+</html>

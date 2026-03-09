@@ -1,12 +1,12 @@
 import { mkdir, writeFile, copyFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { stringify as stringifyYaml } from "yaml";
 import type { EvalsFile } from "./types.js";
 
 const SCAFFOLD_DIRS = ["runs", ".copilot-eval"];
 
 const BLANK_EVALS: EvalsFile = {
-  $schema: "./.copilot-eval/evals.schema.json",
   scripts: {
     "setup": "echo 'global setup'",
     "teardown": "echo 'global teardown'",
@@ -20,7 +20,7 @@ const BLANK_EVALS: EvalsFile = {
       turns: [
         {
           prompt: "Create a hello world project",
-          expected: "Should scaffold a basic project with an entry point",
+          expected_response: "Should scaffold a basic project with an entry point",
         },
       ],
     },
@@ -54,9 +54,9 @@ export async function initEvalProject(targetDir: string, force = false): Promise
       console.error(`❌ .copilot-eval already exists in ${dir}. Use --force to overwrite.`);
       process.exit(1);
     }
-  } else if (existsSync(join(dir, "evals.json"))) {
+  } else if (existsSync(join(dir, "evals.yaml")) || existsSync(join(dir, "evals.yml"))) {
     if (!force) {
-      console.error(`❌ evals.json already exists in ${dir}. Use --force to overwrite.`);
+      console.error(`❌ evals.yaml already exists in ${dir}. Use --force to overwrite.`);
       process.exit(1);
     }
   }
@@ -71,8 +71,8 @@ export async function initEvalProject(targetDir: string, force = false): Promise
   const pkgJson = { ...BLANK_PACKAGE_JSON, name: dirName };
 
   await writeFile(
-    join(dir, "evals.json"),
-    JSON.stringify(BLANK_EVALS, null, 2) + "\n",
+    join(dir, "evals.yaml"),
+    stringifyYaml(BLANK_EVALS, { lineWidth: 0 }),
   );
 
   await writeFile(
@@ -85,7 +85,7 @@ export async function initEvalProject(targetDir: string, force = false): Promise
 
   console.log(`✅ Initialized eval project in ${dir}`);
   console.log(`   Created:`);
-  console.log(`     evals.json                      — define your eval cases here`);
+  console.log(`     evals.yaml                      — define your eval cases here`);
   console.log(`     package.json                    — npm scripts for setup/teardown hooks`);
   console.log(`     .copilot-eval/evals.schema.json  — JSON schema for editor validation`);
   console.log(`     runs/                           — timestamped run folders (results, logs, workspaces)`);

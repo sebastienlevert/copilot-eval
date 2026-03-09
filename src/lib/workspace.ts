@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
+import { parse as parseYaml } from "yaml";
 import type { CommandResult, EvalCase, EvalsFile, EvalRunResults, RunCommandOptions } from "./types.js";
 
 export interface InteractiveResult {
@@ -179,15 +180,32 @@ export function runInteractiveCommand(
 
 /**
  * Load evals from a project directory.
+ * Supports evals.yaml (preferred), evals.yml, and evals.json (legacy fallback).
  * Supports both the new object format ({ evals: [...] }) and the legacy bare-array format.
  */
 export async function loadEvals(skillDir: string): Promise<EvalsFile> {
-  const evalsPath = join(skillDir, "evals.json");
-  if (!existsSync(evalsPath)) {
-    throw new Error(`No evals.json found at ${evalsPath}`);
+  const yamlPath = join(skillDir, "evals.yaml");
+  const ymlPath = join(skillDir, "evals.yml");
+  const jsonPath = join(skillDir, "evals.json");
+
+  let raw: string;
+  let isYaml: boolean;
+
+  if (existsSync(yamlPath)) {
+    raw = await readFile(yamlPath, "utf-8");
+    isYaml = true;
+  } else if (existsSync(ymlPath)) {
+    raw = await readFile(ymlPath, "utf-8");
+    isYaml = true;
+  } else if (existsSync(jsonPath)) {
+    raw = await readFile(jsonPath, "utf-8");
+    isYaml = false;
+  } else {
+    throw new Error(`No evals.yaml (or evals.yml / evals.json) found at ${skillDir}`);
   }
-  const raw = await readFile(evalsPath, "utf-8");
-  const parsed = JSON.parse(raw);
+
+  const parsed = isYaml ? parseYaml(raw) : JSON.parse(raw);
+
   // Backward-compatible: bare array → wrap into EvalsFile
   if (Array.isArray(parsed)) {
     return { evals: parsed };
@@ -228,7 +246,7 @@ export function resolvePlaceholders(template: string, vars: ScriptVariables): st
 }
 
 /**
- * Run a shell command defined in evals.json scripts.
+ * Run a shell command defined in evals.yml scripts.
  * Resolves placeholders and exposes variables as COPILOT_EVAL_* env vars.
  * Runs in the specified cwd. Throws on non-zero exit.
  */

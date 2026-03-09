@@ -31,7 +31,7 @@ function makeResults(overrides?: Partial<EvalRunResults>): EvalRunResults {
       {
         index: 0,
         title: "hello eval",
-        turns: [{ prompt: "hello", expected: "world" }],
+        turns: [{ prompt: "hello", expected_response: "world" }],
         duration: 1000,
         judgment: null,
       },

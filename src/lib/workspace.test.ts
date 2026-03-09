@@ -4,6 +4,7 @@ import { mkdtemp, rm, readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { stringify as stringifyYaml } from "yaml";
 import type { EvalRunResults } from "./types.js";
 
 const dirs: string[] = [];
@@ -211,29 +212,29 @@ describe("runCommand", () => {
 // loadEvals
 // ---------------------------------------------------------------------------
 describe("loadEvals", () => {
-  it("loads a valid evals.json", async () => {
+  it("loads a valid evals.yaml", async () => {
     const dir = await makeTempDir();
     const evals = [
-      { title: "hello", turns: [{ prompt: "hello", expected: "world" }] },
-      { title: "foo", turns: [{ prompt: "foo", expected: "bar" }] },
+      { title: "hello", turns: [{ prompt: "hello", expected_response: "world" }] },
+      { title: "foo", turns: [{ prompt: "foo", expected_response: "bar" }] },
     ];
-    await writeFile(join(dir, "evals.json"), JSON.stringify(evals));
+    await writeFile(join(dir, "evals.yaml"), stringifyYaml(evals));
     const result = await loadEvals(dir);
     expect(result.evals).toEqual(evals);
   });
 
-  it("throws if evals.json does not exist", async () => {
+  it("throws if evals.yaml does not exist", async () => {
     const dir = await makeTempDir();
-    await expect(loadEvals(dir)).rejects.toThrow("No evals.json found");
+    await expect(loadEvals(dir)).rejects.toThrow("No evals.yaml");
   });
 
   it("parses evals with categories", async () => {
     const dir = await makeTempDir();
     const evals = [
-      { title: "t1", turns: [{ prompt: "p1", expected: "e1" }], category: "scaffolding" },
-      { title: "t2", turns: [{ prompt: "p2", expected: "e2" }], category: "deployment" },
+      { title: "t1", turns: [{ prompt: "p1", expected_response: "e1" }], category: "scaffolding" },
+      { title: "t2", turns: [{ prompt: "p2", expected_response: "e2" }], category: "deployment" },
     ];
-    await writeFile(join(dir, "evals.json"), JSON.stringify(evals));
+    await writeFile(join(dir, "evals.yaml"), stringifyYaml(evals));
     const result = await loadEvals(dir);
     expect(result.evals[0].category).toBe("scaffolding");
     expect(result.evals[1].category).toBe("deployment");
@@ -241,15 +242,15 @@ describe("loadEvals", () => {
 
   it("loads an empty array", async () => {
     const dir = await makeTempDir();
-    await writeFile(join(dir, "evals.json"), "[]");
+    await writeFile(join(dir, "evals.yaml"), stringifyYaml([]));
     const result = await loadEvals(dir);
     expect(result.evals).toEqual([]);
   });
 
   it("loads a single eval", async () => {
     const dir = await makeTempDir();
-    const evals = [{ title: "only one", turns: [{ prompt: "only one", expected: "result" }] }];
-    await writeFile(join(dir, "evals.json"), JSON.stringify(evals));
+    const evals = [{ title: "only one", turns: [{ prompt: "only one", expected_response: "result" }] }];
+    await writeFile(join(dir, "evals.yaml"), stringifyYaml(evals));
     const result = await loadEvals(dir);
     expect(result.evals).toHaveLength(1);
   });
@@ -258,25 +259,25 @@ describe("loadEvals", () => {
     const dir = await makeTempDir();
     const evals = Array.from({ length: 20 }, (_, i) => ({
       title: `eval-${i}`,
-      turns: [{ prompt: `prompt-${i}`, expected: `expected-${i}` }],
+      turns: [{ prompt: `prompt-${i}`, expected_response: `expected-${i}` }],
     }));
-    await writeFile(join(dir, "evals.json"), JSON.stringify(evals));
+    await writeFile(join(dir, "evals.yaml"), stringifyYaml(evals));
     const result = await loadEvals(dir);
     for (let i = 0; i < 20; i++) {
       expect(result.evals[i].title).toBe(`eval-${i}`);
     }
   });
 
-  it("throws on invalid JSON", async () => {
+  it("throws on invalid YAML", async () => {
     const dir = await makeTempDir();
-    await writeFile(join(dir, "evals.json"), "not json {{{");
+    await writeFile(join(dir, "evals.yaml"), ":\n  - :\n    - : }{");
     await expect(loadEvals(dir)).rejects.toThrow();
   });
 
   it("loads evals with optional fields missing", async () => {
     const dir = await makeTempDir();
-    const evals = [{ title: "no category", turns: [{ prompt: "no category", expected: "result" }] }];
-    await writeFile(join(dir, "evals.json"), JSON.stringify(evals));
+    const evals = [{ title: "no category", turns: [{ prompt: "no category", expected_response: "result" }] }];
+    await writeFile(join(dir, "evals.yaml"), stringifyYaml(evals));
     const result = await loadEvals(dir);
     expect(result.evals[0].category).toBeUndefined();
   });
@@ -285,13 +286,33 @@ describe("loadEvals", () => {
     const dir = await makeTempDir();
     const evalsFile = {
       scripts: { setup: "echo global", teardown: "echo done" },
-      evals: [{ title: "t1", turns: [{ prompt: "p1", expected: "e1" }], scripts: { setup: "echo eval" } }],
+      evals: [{ title: "t1", turns: [{ prompt: "p1", expected_response: "e1" }], scripts: { setup: "echo eval" } }],
     };
-    await writeFile(join(dir, "evals.json"), JSON.stringify(evalsFile));
+    await writeFile(join(dir, "evals.yaml"), stringifyYaml(evalsFile));
     const result = await loadEvals(dir);
     expect(result.scripts?.setup).toBe("echo global");
     expect(result.scripts?.teardown).toBe("echo done");
     expect(result.evals[0].scripts?.setup).toBe("echo eval");
+  });
+
+  it("falls back to evals.yml when evals.yaml is missing", async () => {
+    const dir = await makeTempDir();
+    const evals = [
+      { title: "yml-fallback", turns: [{ prompt: "hello", expected_response: "world" }] },
+    ];
+    await writeFile(join(dir, "evals.yml"), stringifyYaml(evals));
+    const result = await loadEvals(dir);
+    expect(result.evals).toEqual(evals);
+  });
+
+  it("falls back to evals.json when evals.yaml is missing", async () => {
+    const dir = await makeTempDir();
+    const evals = [
+      { title: "legacy", turns: [{ prompt: "hello", expected_response: "world" }] },
+    ];
+    await writeFile(join(dir, "evals.json"), JSON.stringify(evals));
+    const result = await loadEvals(dir);
+    expect(result.evals).toEqual(evals);
   });
 });
 
@@ -308,7 +329,7 @@ describe("saveResults", () => {
       {
         index: 0,
         title: "hello eval",
-        turns: [{ prompt: "hello", expected: "world" }],
+        turns: [{ prompt: "hello", expected_response: "world" }],
         duration: 1000,
         judgment: null,
       },
@@ -381,7 +402,7 @@ describe("saveResults", () => {
           index: 0,
           sessionId: "abc-123",
           title: "test eval",
-          turns: [{ prompt: "test", expected: "result" }],
+          turns: [{ prompt: "test", expected_response: "result" }],
           category: "cat1",
           response: "output",
           exitCode: 0,
@@ -413,7 +434,7 @@ describe("saveResults", () => {
         {
           index: 0,
           title: "fail eval",
-          turns: [{ prompt: "fail", expected: "result" }],
+          turns: [{ prompt: "fail", expected_response: "result" }],
           error: "something broke",
           duration: 0,
           judgment: null,

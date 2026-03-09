@@ -17,7 +17,7 @@ function makeEvalResult(overrides?: Partial<EvalResult>): EvalResult {
   return {
     index: 0,
     title: "test eval",
-    turns: [{ prompt: "test prompt", expected: "test expected" }],
+    turns: [{ prompt: "test prompt", expected_response: "test expected" }],
     duration: 1000,
     judgment: makeJudgment(),
     ...overrides,

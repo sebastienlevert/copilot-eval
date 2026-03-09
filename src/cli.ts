@@ -13,7 +13,27 @@ import { generateDashboard } from "./lib/dashboard.js";
 import { initEvalProject } from "./lib/init.js";
 import type { EvalCase, EvalResult, EvalRunResults, EvalsFile } from "./lib/types.js";
 
-const SKILLS_DIR = join(homedir(), ".copilot", "skills");
+const COPILOT_DIR = join(homedir(), ".copilot");
+
+/** Recursively search for a directory named `skillName` anywhere under `baseDir`. */
+function findSkillPath(baseDir: string, skillName: string): string | null {
+  // Check direct child first (fast path for ~/.copilot/skills/<name>, ~/.copilot/plugins/<name>, etc.)
+  if (!existsSync(baseDir)) return null;
+
+  const entries = readdirSync(baseDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name === skillName) return join(baseDir, entry.name);
+  }
+  // Recurse into subdirectories (skip node_modules, logs, session-state, runs)
+  const SKIP = new Set(["node_modules", "logs", "session-state", "runs"]);
+  for (const entry of entries) {
+    if (!entry.isDirectory() || SKIP.has(entry.name)) continue;
+    const found = findSkillPath(join(baseDir, entry.name), skillName);
+    if (found) return found;
+  }
+  return null;
+}
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -151,7 +171,7 @@ interface RunOptions {
 program
   .command("run")
   .description("Run evals from the current eval project directory")
-  .requiredOption("-s, --skill <name>", "Skill name (must exist in ~/.copilot/skills/)")
+  .requiredOption("-s, --skill <name>", "Skill name (searches recursively in ~/.copilot/)")
   .option("-e, --eval <index>", "Run a specific eval by index (0-based)")
   .option("--category <name>", "Run evals in a specific category")
   .option("-f, --filter <pattern>", "Run evals matching a prompt pattern")
@@ -159,7 +179,7 @@ program
   .option("--skip-judge", "Skip the judging step", false)
   .option("-v, --verbose", "Print all script output and phase changes", false)
   .option("-c, --concurrency <n>", "Number of evals to run in parallel", "5")
-  .option("-m, --model <model>", "Copilot CLI model to use", "claude-opus-4.6-fast")
+  .option("-m, --model <model>", "Copilot CLI model to use", "claude-opus-4.6")
   .action(async (opts: RunOptions) => {
     const projectDir = process.cwd();
     const concurrency = parseInt(opts.concurrency, 10);
@@ -186,15 +206,15 @@ program
     };
 
     // Validate we're in an eval project
-    if (!existsSync(join(projectDir, "evals.json"))) {
-      logErr("❌ No evals.json found in current directory. Run `copilot-eval init` first.");
+    if (!existsSync(join(projectDir, "evals.yaml")) && !existsSync(join(projectDir, "evals.yml")) && !existsSync(join(projectDir, "evals.json"))) {
+      logErr("❌ No evals.yaml found in current directory. Run `copilot-eval init` first.");
       process.exit(1);
     }
 
     // Validate skill is installed
-    const skillPath = join(SKILLS_DIR, opts.skill);
-    if (!existsSync(skillPath)) {
-      logErr(`❌ Skill "${opts.skill}" not found in ${SKILLS_DIR}`);
+    const skillPath = findSkillPath(COPILOT_DIR, opts.skill);
+    if (!skillPath) {
+      logErr(`❌ Skill "${opts.skill}" not found in ${COPILOT_DIR} (searched recursively)`);
       process.exit(1);
     }
     log(`✅ Skill "${opts.skill}": ${skillPath}`);
@@ -232,7 +252,7 @@ program
     process.on("SIGINT", onInterrupt);
     process.on("SIGTERM", onInterrupt);
 
-    log(`🔍 Evals file: ${projectDir}/evals.json`);
+    log(`🔍 Evals file: ${projectDir}/evals.yml`);
     const evalsFile: EvalsFile = await loadEvals(projectDir);
     let evals: EvalCase[] = evalsFile.evals;
 
@@ -249,7 +269,7 @@ program
     } else if (opts.filter) {
       const pattern = new RegExp(opts.filter, "i");
       evals = evals.filter(
-        (e) => pattern.test(e.title) || e.turns.some((t) => pattern.test(t.prompt) || pattern.test(t.expected)),
+        (e) => pattern.test(e.title) || e.turns.some((t) => pattern.test(t.prompt) || pattern.test(t.expected_response)),
       );
       log(`  Filtered to ${evals.length} evals matching "${opts.filter}"`);
     }

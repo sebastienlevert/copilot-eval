@@ -1,6 +1,6 @@
 export interface EvalTurn {
   prompt: string;
-  expected: string;
+  expected_response: string;
 }
 
 export interface EvalScripts {
@@ -23,7 +23,7 @@ export interface EvalCase {
 }
 
 /**
- * Top-level structure of evals.json.
+ * Top-level structure of evals.yml.
  * Supports both the new object format and legacy bare-array format.
  */
 export interface EvalsFile {

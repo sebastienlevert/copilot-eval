@@ -34,10 +34,10 @@ export function buildJudgingPrompt(evalCase: EvalCase, skillOutput: SkillOutput)
   let evalSection: string;
   if (isMultiTurn) {
     evalSection = turns.map((t, i) =>
-      `### Turn ${i + 1}\n\n**User Prompt:** ${t.prompt}\n\n**Expected Behavior:** ${t.expected}`
+      `### Turn ${i + 1}\n\n**User Prompt:** ${t.prompt}\n\n**Expected Behavior:** ${t.expected_response}`
     ).join("\n\n");
   } else {
-    evalSection = `**User Prompt:** ${turns[0].prompt}\n\n**Expected Behavior:** ${turns[0].expected}`;
+    evalSection = `**User Prompt:** ${turns[0].prompt}\n\n**Expected Behavior:** ${turns[0].expected_response}`;
   }
 
   let outputSection: string;

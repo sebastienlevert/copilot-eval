@@ -408,7 +408,7 @@ function buildDetailPanel(ev) {
     html += `</div>`;
     html += `<div class="turn-body-content">`;
     html += `<div class="turn-section"><div class="turn-section-label prompt-label">Prompt</div><div class="turn-section-content">${escHtml(turns[i].prompt)}</div></div>`;
-    html += `<div class="turn-section"><div class="turn-section-label">Expected</div><div class="turn-section-content expected-content">${escHtml(turns[i].expected)}</div></div>`;
+    html += `<div class="turn-section"><div class="turn-section-label">Expected</div><div class="turn-section-content expected-content">${escHtml(turns[i].expected_response)}</div></div>`;
     if (hasResp) {
       html += `<div class="turn-section"><div class="turn-section-label">Response</div><div class="turn-response-content">${escHtml(ev.turnResponses[i])}</div></div>`;
     }

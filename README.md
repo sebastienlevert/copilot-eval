@@ -16,14 +16,14 @@ Skills, plugins, and MCP servers extend what Copilot CLI can do, but there's no 
 ## How it works
 
 ```
-evals.json ──→ Runner ──→ Skill Output ──→ Judge ──→ Scorecard
+evals.yaml ──→ Runner ──→ Skill Output ──→ Judge ──→ Scorecard
                  │                           │
                  ▼                           ▼
            Isolated workspace         LLM-as-judge
            (one per eval)             (automated verdict)
 ```
 
-1. **Load** — reads `evals.json` from your eval project and applies any filters (category, pattern, index).
+1. **Load** — reads `evals.yaml` from your eval project and applies any filters (category, pattern, index).
 2. **Execute** — for each eval, spins up an isolated temp workspace, then pipes the prompt to the Copilot CLI with your skill loaded. Multi-turn conversations are supported.
 3. **Judge** — sends the skill's output (tool calls, file changes, CLI response) and your expected-behavior description to an LLM-as-judge, which returns a structured JSON verdict.
 4. **Report** — prints a live progress display with per-eval results, then a summary scorecard. Full results, logs, and an HTML dashboard are saved to `runs/`.
@@ -58,7 +58,7 @@ This scaffolds:
 
 ```
 my-evals/
-  evals.json           — your eval cases (prompt + expected behavior)
+  evals.yaml           — your eval cases (prompt + expected behavior)
   package.json         — npm scripts for setup/teardown hooks
   .copilot-eval/       — JSON schema for editor validation
   runs/                — output from each run
@@ -66,34 +66,23 @@ my-evals/
 
 ### Define evals
 
-Edit `evals.json`. Each eval has a title, one or more conversation turns, and an optional category:
+Edit `evals.yaml`. Each eval has a title, one or more conversation turns, and an optional category:
 
-```json
-{
-  "$schema": "./.copilot-eval/evals.schema.json",
-  "evals": [
-    {
-      "title": "Scaffold a new agent project",
-      "category": "scaffolding",
-      "turns": [
-        {
-          "prompt": "Create a new declarative agent called 'HelloBot'",
-          "expected": "Creates a project directory with a valid declarative agent manifest"
-        }
-      ]
-    },
-    {
-      "title": "Add an MCP tool to an existing agent",
-      "category": "mcp",
-      "turns": [
-        {
-          "prompt": "Add an MCP weather tool that calls the OpenWeather API",
-          "expected": "Adds a tools entry in the manifest pointing to an MCP server config"
-        }
-      ]
-    }
-  ]
-}
+```yaml
+evals:
+  - title: "Scaffold a new agent project"
+    category: scaffolding
+    turns:
+      - prompt: "Create a new declarative agent called 'HelloBot'"
+        expected_response: "Creates a project directory with a valid declarative agent manifest"
+
+  - title: "Add an MCP tool to an existing agent"
+    category: mcp
+    turns:
+      - prompt: "Add an MCP weather tool that calls the OpenWeather API"
+        expected_response: |
+          Adds a tools entry in the manifest pointing to an MCP server config.
+          Should include proper OpenAPI spec and authentication setup.
 ```
 
 ### Run evals
@@ -146,26 +135,22 @@ The console prints a live scorecard as evals complete:
 
 ## Setup & teardown hooks
 
-`evals.json` supports shell scripts that run at different lifecycle points — useful for provisioning test fixtures, seeding data, or cleaning up.
+`evals.yaml` supports shell scripts that run at different lifecycle points — useful for provisioning test fixtures, seeding data, or cleaning up.
 
-```json
-{
-  "scripts": {
-    "setup": "echo 'Runs once before all evals'",
-    "teardown": "echo 'Runs once after all evals'",
-    "setup:eval": "echo 'Default per-eval setup (can be overridden)'",
-    "teardown:eval": "echo 'Default per-eval teardown (can be overridden)'"
-  },
-  "evals": [
-    {
-      "title": "Eval with custom setup",
-      "scripts": {
-        "setup": "cp -r fixtures/ {{workspaceDir}}/"
-      },
-      "turns": [{ "prompt": "...", "expected": "..." }]
-    }
-  ]
-}
+```yaml
+scripts:
+  setup: "echo 'Runs once before all evals'"
+  teardown: "echo 'Runs once after all evals'"
+  setup:eval: "echo 'Default per-eval setup (can be overridden)'"
+  teardown:eval: "echo 'Default per-eval teardown (can be overridden)'"
+
+evals:
+  - title: "Eval with custom setup"
+    scripts:
+      setup: "cp -r fixtures/ {{workspaceDir}}/"
+    turns:
+      - prompt: "..."
+        expected_response: "..."
 ```
 
 **Placeholders** available in scripts: `{{runId}}`, `{{runDir}}`, `{{projectDir}}`, `{{workspaceId}}`, `{{workspaceDir}}`.  
@@ -177,29 +162,19 @@ copilot-eval works with anything the Copilot CLI can load:
 
 | Extension type | What it is | Example eval |
 |---|---|---|
-| **Skill** | A `.md` instruction file in `~/.copilot/skills/` | "Scaffold a new M365 agent project" |
+| **Skill** | A `.md` instruction file in `~/.copilot/` | "Scaffold a new M365 agent project" |
 | **Plugin** | A tool plugin registered with the CLI | "Search our internal docs for deployment guides" |
 | **MCP server** | A Model Context Protocol server providing tools | "Query the database for active users" |
 
 The eval doesn't care how the capability is implemented — it sends a prompt, captures the full session output, and judges whether the expected behavior occurred.
 
-## CLI reference
+Skills are discovered by searching recursively through `~/.copilot/` — they can live in `skills/`, `plugins/`, or any nested subfolder.
 
-```
-copilot-eval init [dir]           Scaffold a new eval project
-copilot-eval run                  Run evals from the current project
+## Documentation
 
-Options for `run`:
-  -s, --skill <name>              Skill name (required, must exist in ~/.copilot/skills/)
-  -e, --eval <index>              Run a single eval by 0-based index
-  -f, --filter <pattern>          Run evals matching a regex pattern
-      --category <name>           Run evals in a specific category
-  -o, --output <file>             Save results to a specific file
-      --skip-judge                Skip the judging step
-  -m, --model <model>             Copilot CLI model (default: claude-opus-4.6-fast)
-  -c, --concurrency <n>           Parallel eval slots (default: 5)
-  -v, --verbose                   Print all script output and phase changes
-```
+- **[Getting Started](./docs/getting-started.md)** — Setup, first evals, reading results
+- **[CLI Reference](./docs/cli-reference.md)** — All commands, flags, skill discovery, and output structure
+- **[Evals File Format](./docs/evals-file-format.md)** — Full YAML schema, multi-turn examples, scripts, placeholders, and judging guidance
 
 ## Building from source
 

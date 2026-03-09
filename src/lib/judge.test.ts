@@ -8,7 +8,7 @@ function makeEvalCase(overrides?: Partial<EvalCase>): EvalCase {
     turns: [
       {
         prompt: "Create a Teams bot",
-        expected: "Should scaffold a bot project using Teams Toolkit",
+        expected_response: "Should scaffold a bot project using Teams Toolkit",
       },
     ],
     ...overrides,
@@ -101,7 +101,7 @@ describe("buildJudgingPrompt", () => {
   it("handles long prompts", () => {
     const longPrompt = "x".repeat(5000);
     const result = buildJudgingPrompt(
-      makeEvalCase({ turns: [{ prompt: longPrompt, expected: "test" }] }),
+      makeEvalCase({ turns: [{ prompt: longPrompt, expected_response: "test" }] }),
       makeSkillOutput(),
     );
     expect(result).toContain(longPrompt);
@@ -118,7 +118,7 @@ describe("buildJudgingPrompt", () => {
 
   it("handles special characters in prompt", () => {
     const result = buildJudgingPrompt(
-      makeEvalCase({ turns: [{ prompt: 'test "with" <special> & chars', expected: "test" }] }),
+      makeEvalCase({ turns: [{ prompt: 'test "with" <special> & chars', expected_response: "test" }] }),
       makeSkillOutput(),
     );
     expect(result).toContain('test "with" <special> & chars');
@@ -126,7 +126,7 @@ describe("buildJudgingPrompt", () => {
 
   it("handles multi-line expected behavior", () => {
     const result = buildJudgingPrompt(
-      makeEvalCase({ turns: [{ prompt: "test", expected: "line1\nline2\nline3" }] }),
+      makeEvalCase({ turns: [{ prompt: "test", expected_response: "line1\nline2\nline3" }] }),
       makeSkillOutput(),
     );
     expect(result).toContain("line1\nline2\nline3");

@@ -43,7 +43,7 @@ copilot-eval/
 │   │   ├── dashboard.ts       # HTML dashboard generator
 │   │   ├── *.test.ts          # Unit tests (co-located with source)
 │   ├── templates/
-│   │   ├── evals.schema.json  # JSON schema for evals.json
+│   │   ├── evals.schema.json  # JSON schema for evals.yaml
 │   │   └── dashboard.html     # HTML template for the dashboard
 ├── scripts/
 │   └── build-binary.js        # Standalone binary builder (esbuild + Node SEA)
@@ -101,7 +101,7 @@ Load → Execute → Judge → Report
 
 | Stage | Module | What it does |
 |---|---|---|
-| **Load** | `workspace.ts` | Reads `evals.json`, applies filters, creates isolated workspaces |
+| **Load** | `workspace.ts` | Reads `evals.yaml` (or `.yml` / `.json`), applies filters, creates isolated workspaces |
 | **Execute** | `runner.ts` | Pipes each prompt to `copilot` CLI via stdin, captures output |
 | **Judge** | `judge.ts` | Sends output + expectations to an LLM-as-judge, parses JSON verdict |
 | **Report** | `reporter.ts` | Builds a console scorecard and saves structured results |

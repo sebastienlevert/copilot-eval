@@ -4,6 +4,7 @@ import { mkdtemp, rm, readFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { parse as parseYaml } from "yaml";
 
 const dirs: string[] = [];
 
@@ -24,10 +25,10 @@ afterEach(async () => {
 // initEvalProject
 // ---------------------------------------------------------------------------
 describe("initEvalProject", () => {
-  it("creates evals.json", async () => {
+  it("creates evals.yaml", async () => {
     const dir = await makeTempDir();
     await initEvalProject(dir);
-    expect(existsSync(join(dir, "evals.json"))).toBe(true);
+    expect(existsSync(join(dir, "evals.yaml"))).toBe(true);
   });
 
   it("creates runs directory", async () => {
@@ -42,68 +43,61 @@ describe("initEvalProject", () => {
     expect(existsSync(join(dir, "runs", ".gitkeep"))).toBe(true);
   });
 
-  it("evals.json contains valid JSON", async () => {
+  it("evals.yaml contains valid YAML", async () => {
     const dir = await makeTempDir();
     await initEvalProject(dir);
-    const raw = await readFile(join(dir, "evals.json"), "utf-8");
-    expect(() => JSON.parse(raw)).not.toThrow();
+    const raw = await readFile(join(dir, "evals.yaml"), "utf-8");
+    expect(() => parseYaml(raw)).not.toThrow();
   });
 
-  it("evals.json contains an object with evals array", async () => {
+  it("evals.yaml contains an object with evals array", async () => {
     const dir = await makeTempDir();
     await initEvalProject(dir);
-    const raw = await readFile(join(dir, "evals.json"), "utf-8");
-    const parsed = JSON.parse(raw);
+    const raw = await readFile(join(dir, "evals.yaml"), "utf-8");
+    const parsed = parseYaml(raw);
     expect(parsed).toHaveProperty("evals");
     expect(Array.isArray(parsed.evals)).toBe(true);
   });
 
-  it("evals.json contains at least one eval case", async () => {
+  it("evals.yaml contains at least one eval case", async () => {
     const dir = await makeTempDir();
     await initEvalProject(dir);
-    const raw = await readFile(join(dir, "evals.json"), "utf-8");
-    const parsed = JSON.parse(raw);
+    const raw = await readFile(join(dir, "evals.yaml"), "utf-8");
+    const parsed = parseYaml(raw);
     expect(parsed.evals.length).toBeGreaterThan(0);
   });
 
   it("starter eval has title field", async () => {
     const dir = await makeTempDir();
     await initEvalProject(dir);
-    const parsed = JSON.parse(await readFile(join(dir, "evals.json"), "utf-8"));
+    const parsed = parseYaml(await readFile(join(dir, "evals.yaml"), "utf-8"));
     expect(parsed.evals[0]).toHaveProperty("title");
   });
 
   it("starter eval has turns field", async () => {
     const dir = await makeTempDir();
     await initEvalProject(dir);
-    const parsed = JSON.parse(await readFile(join(dir, "evals.json"), "utf-8"));
+    const parsed = parseYaml(await readFile(join(dir, "evals.yaml"), "utf-8"));
     expect(parsed.evals[0]).toHaveProperty("turns");
     expect(parsed.evals[0].turns[0]).toHaveProperty("prompt");
-    expect(parsed.evals[0].turns[0]).toHaveProperty("expected");
+    expect(parsed.evals[0].turns[0]).toHaveProperty("expected_response");
   });
 
   it("starter eval has category field", async () => {
     const dir = await makeTempDir();
     await initEvalProject(dir);
-    const parsed = JSON.parse(await readFile(join(dir, "evals.json"), "utf-8"));
+    const parsed = parseYaml(await readFile(join(dir, "evals.yaml"), "utf-8"));
     expect(parsed.evals[0]).toHaveProperty("category");
   });
 
-  it("evals.json is pretty-printed", async () => {
+  it("evals.yaml ends with newline", async () => {
     const dir = await makeTempDir();
     await initEvalProject(dir);
-    const raw = await readFile(join(dir, "evals.json"), "utf-8");
-    expect(raw).toContain("  ");
-  });
-
-  it("evals.json ends with newline", async () => {
-    const dir = await makeTempDir();
-    await initEvalProject(dir);
-    const raw = await readFile(join(dir, "evals.json"), "utf-8");
+    const raw = await readFile(join(dir, "evals.yaml"), "utf-8");
     expect(raw.endsWith("\n")).toBe(true);
   });
 
-  it("exits if evals.json already exists", async () => {
+  it("exits if evals.yaml already exists", async () => {
     const dir = await makeTempDir();
     const mockExit = vi.spyOn(process, "exit").mockImplementation((() => {
       throw new Error("process.exit called");
@@ -132,7 +126,7 @@ describe("initEvalProject", () => {
     await initEvalProject(dir);
     // Should not throw with force=true
     await initEvalProject(dir, true);
-    expect(existsSync(join(dir, "evals.json"))).toBe(true);
+    expect(existsSync(join(dir, "evals.yaml"))).toBe(true);
     expect(existsSync(join(dir, ".copilot-eval", "evals.schema.json"))).toBe(true);
   });
 
@@ -140,14 +134,14 @@ describe("initEvalProject", () => {
     const dir = await makeTempDir();
     const sub = join(dir, "sub");
     await initEvalProject(sub);
-    expect(existsSync(join(sub, "evals.json"))).toBe(true);
+    expect(existsSync(join(sub, "evals.yaml"))).toBe(true);
   });
 
   it("creates nested target directories", async () => {
     const dir = await makeTempDir();
     const nested = join(dir, "a", "b", "c");
     await initEvalProject(nested);
-    expect(existsSync(join(nested, "evals.json"))).toBe(true);
+    expect(existsSync(join(nested, "evals.yaml"))).toBe(true);
     expect(existsSync(join(nested, "runs"))).toBe(true);
   });
 
@@ -178,10 +172,10 @@ describe("initEvalProject", () => {
     expect(schema).toHaveProperty("definitions");
   });
 
-  it("evals.json references the schema", async () => {
+  it("evals.yaml references no $schema (YAML)", async () => {
     const dir = await makeTempDir();
     await initEvalProject(dir);
-    const parsed = JSON.parse(await readFile(join(dir, "evals.json"), "utf-8"));
-    expect(parsed.$schema).toBe("./.copilot-eval/evals.schema.json");
+    const parsed = parseYaml(await readFile(join(dir, "evals.yaml"), "utf-8"));
+    expect(parsed.$schema).toBeUndefined();
   });
 });

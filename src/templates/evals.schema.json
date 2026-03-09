@@ -80,14 +80,14 @@
     },
     "evalTurn": {
       "type": "object",
-      "required": ["prompt", "expected"],
+      "required": ["prompt", "expected_response"],
       "additionalProperties": false,
       "properties": {
         "prompt": {
           "type": "string",
           "description": "The user prompt to send to the Copilot CLI."
         },
-        "expected": {
+        "expected_response": {
           "type": "string",
           "description": "Description of the expected behavior for judging."
         }

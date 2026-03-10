@@ -24,6 +24,11 @@
           "$ref": "#/definitions/evalScripts",
           "description": "Global setup/teardown shell commands. Setup runs once before all evals (in the project directory). Teardown runs once after all evals. Supports placeholders: {{runId}}, {{runDir}}, {{projectDir}}. Variables also available as COPILOT_EVAL_* env vars."
         },
+        "plugins": {
+          "type": "array",
+          "description": "Plugin folder paths to include in an isolated config dir. When set, only these plugins are available to the Copilot CLI during the run. Paths can be absolute or relative to the evals file location.",
+          "items": { "type": "string" }
+        },
         "evals": {
           "type": "array",
           "description": "List of eval cases to run.",

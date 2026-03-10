@@ -13,6 +13,10 @@ YAML is recommended because it supports multiline strings natively, making compl
 ## Structure
 
 ```yaml
+plugins:
+  - ../my-plugin                   # Relative path to a plugin folder (resolved from evals file location)
+  - /home/user/.copilot/installed-plugins/_direct/m365-agents-toolkit  # Absolute path also works
+
 scripts:
   setup: "echo 'runs once before all evals'"
   teardown: "echo 'runs once after all evals'"
@@ -34,6 +38,7 @@ evals:
 
 | Field | Required | Description |
 |-------|----------|-------------|
+| `plugins` | No | List of plugin folder paths (absolute or relative to evals file) — enables isolated mode (see [Plugin Isolation](#plugin-isolation)) |
 | `scripts` | No | Global setup/teardown hooks |
 | `evals` | **Yes** | Array of eval cases |
 
@@ -195,6 +200,42 @@ The tool also supports a bare JSON array (no wrapper object). This is for backwa
   }
 ]
 ```
+
+---
+
+## Plugin Isolation
+
+By default, the Copilot CLI loads all skills and plugins from `~/.copilot/`. The `plugins` field lets you run evals in an isolated environment where **only the listed plugins are available**.
+
+Each entry is a **path** to a plugin folder — either absolute or relative to the evals file location.
+
+```yaml
+plugins:
+  - ../my-plugin                     # relative to the evals file
+  - ~/.copilot/installed-plugins/_direct/m365-agents-toolkit  # absolute
+
+evals:
+  - title: "Test agent scaffolding in isolation"
+    turns:
+      - prompt: "Create a new declarative agent"
+        expected_response: "Should use the m365-agent-developer skill"
+```
+
+**How it works:**
+
+1. A `.copilot/` directory is created inside the run folder (e.g., `runs/2026-03-10-001/.copilot/`)
+2. Each plugin path is resolved (relative paths are resolved from the evals file directory) and symlinked into `installed-plugins/_eval/` inside the isolated config dir
+3. The Copilot CLI is invoked with `--config-dir` pointing to this isolated directory
+4. Logs are collected from the isolated config dir instead of `~/.copilot/logs/`
+
+**Benefits:**
+
+- **No interference** — other skills can't accidentally respond to prompts
+- **Reproducible** — same plugins every run, regardless of what's installed globally
+- **Debuggable** — the `.copilot/` dir is preserved in the run folder for inspection
+- **Flexible** — point to local dev copies of plugins for testing before publishing
+
+If `plugins` is omitted, all globally installed skills/plugins are available (the default behavior).
 
 ---
 

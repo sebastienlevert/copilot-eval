@@ -321,7 +321,6 @@ describe("loadEvals", () => {
 // ---------------------------------------------------------------------------
 describe("saveResults", () => {
   const makeResults = (overrides?: Partial<EvalRunResults>): EvalRunResults => ({
-    skill: "test-skill",
     timestamp: "2026-01-01T00:00:00.000Z",
     totalDuration: 5000,
     evalCount: 1,
@@ -358,11 +357,10 @@ describe("saveResults", () => {
 
   it("writes correct data", async () => {
     const dir = await makeTempDir();
-    const results = makeResults({ skill: "my-skill" });
+    const results = makeResults({ evalCount: 2 });
     await saveResults(dir, results, "out.json");
     const parsed = JSON.parse(await readFile(join(dir, "out.json"), "utf-8"));
-    expect(parsed.skill).toBe("my-skill");
-    expect(parsed.evalCount).toBe(1);
+    expect(parsed.evalCount).toBe(2);
   });
 
   it("pretty-prints with 2-space indent", async () => {
@@ -388,10 +386,10 @@ describe("saveResults", () => {
 
   it("overwrites existing file", async () => {
     const dir = await makeTempDir();
-    await saveResults(dir, makeResults({ skill: "first" }), "r.json");
-    await saveResults(dir, makeResults({ skill: "second" }), "r.json");
+    await saveResults(dir, makeResults({ evalCount: 1 }), "r.json");
+    await saveResults(dir, makeResults({ evalCount: 2 }), "r.json");
     const parsed = JSON.parse(await readFile(join(dir, "r.json"), "utf-8"));
-    expect(parsed.skill).toBe("second");
+    expect(parsed.evalCount).toBe(2);
   });
 
   it("preserves all eval result fields", async () => {

@@ -18,7 +18,7 @@
 <style>
   /* === Fluent v9 light-theme tokens (default) === */
   :root, [data-theme="light"] {
-    --pass: #107c10; --partial: #c4a000; --fail: #d13438; --error: #7160e8;
+    --pass: #107c10; --partial: #c4a000; --fail: #d13438; --error: #7160e8; --skipped: #8a8a8a;
     --colorNeutralBackground1: #ffffff; --colorNeutralBackground2: #fafafa; --colorNeutralBackground3: #f5f5f5;
     --colorNeutralBackground1Hover: #f5f5f5; --colorNeutralBackground1Pressed: #ebebeb;
     --colorNeutralForeground1: #242424; --colorNeutralForeground2: #424242; --colorNeutralForeground3: #616161;
@@ -39,13 +39,13 @@
     --border: var(--colorNeutralStroke2); --border-strong: var(--colorNeutralStroke1);
     --text: var(--colorNeutralForeground1); --muted: var(--colorNeutralForeground3); --text2: var(--colorNeutralForeground2);
     --monacoTheme: vs;
-    --badgePassBg: rgba(16,124,16,0.1); --badgePartialBg: rgba(196,160,0,0.12); --badgeFailBg: rgba(209,52,56,0.1); --badgeErrorBg: rgba(113,96,232,0.1);
+    --badgePassBg: rgba(16,124,16,0.1); --badgePartialBg: rgba(196,160,0,0.12); --badgeFailBg: rgba(209,52,56,0.1); --badgeErrorBg: rgba(113,96,232,0.1); --badgeSkippedBg: rgba(138,138,138,0.1);
     --accentButtonText: #fff;
   }
 
   /* === Fluent v9 dark-theme tokens === */
   [data-theme="dark"] {
-    --pass: #6ccb5f; --partial: #f2c661; --fail: #f36d6d; --error: #c89aff;
+    --pass: #6ccb5f; --partial: #f2c661; --fail: #f36d6d; --error: #c89aff; --skipped: #8a8a8a;
     --colorNeutralBackground1: #1b1b1f; --colorNeutralBackground2: #27272b; --colorNeutralBackground3: #313135;
     --colorNeutralBackground1Hover: #323236; --colorNeutralBackground1Pressed: #3b3b3f;
     --colorNeutralForeground1: #f5f5f5; --colorNeutralForeground2: #d6d6d6; --colorNeutralForeground3: #adadad;
@@ -60,7 +60,7 @@
     --border: var(--colorNeutralStroke2); --border-strong: var(--colorNeutralStroke1);
     --text: var(--colorNeutralForeground1); --muted: var(--colorNeutralForeground3); --text2: var(--colorNeutralForeground2);
     --monacoTheme: vs-dark;
-    --badgePassBg: rgba(108,203,95,0.15); --badgePartialBg: rgba(242,198,97,0.15); --badgeFailBg: rgba(243,109,109,0.15); --badgeErrorBg: rgba(200,154,255,0.15);
+    --badgePassBg: rgba(108,203,95,0.15); --badgePartialBg: rgba(242,198,97,0.15); --badgeFailBg: rgba(243,109,109,0.15); --badgeErrorBg: rgba(200,154,255,0.15); --badgeSkippedBg: rgba(138,138,138,0.15);
     --accentButtonText: #000;
   }
 
@@ -124,6 +124,8 @@
   fluent-badge.badge-partial::part(control) { background: var(--badgePartialBg); color: var(--partial); }
   fluent-badge.badge-fail::part(control) { background: var(--badgeFailBg); color: var(--fail); }
   fluent-badge.badge-error::part(control) { background: var(--badgeErrorBg); color: var(--error); }
+  fluent-badge.badge-skipped::part(control) { background: var(--badgeSkippedBg); color: var(--skipped); }
+  .row-skipped { opacity: 0.5; }
   .hidden { display: none; }
 
   /* === Detail panel === */
@@ -276,15 +278,19 @@ const total = evals.length;
 const pass = evals.filter(e => e.judgment?.verdict === 'pass').length;
 const partial = evals.filter(e => e.judgment?.verdict === 'partial').length;
 const fail = evals.filter(e => e.judgment?.verdict === 'fail').length;
-const errored = evals.filter(e => e.error).length;
-const noJudge = total - pass - partial - fail - errored;
-const avgScore = total ? (evals.reduce((s, e) => s + (e.judgment?.score ?? 0), 0) / total).toFixed(1) : '0';
-const passRate = total ? ((pass / total) * 100).toFixed(1) : '0';
+const skipped = evals.filter(e => e.skipped).length;
+const errored = evals.filter(e => e.error && !e.skipped).length;
+const scored = total - skipped;
+const noJudge = scored - pass - partial - fail - errored;
+const avgScore = scored ? (evals.filter(e => !e.skipped).reduce((s, e) => s + (e.judgment?.score ?? 0), 0) / scored).toFixed(1) : '0';
+const passRate = scored ? ((pass / scored) * 100).toFixed(1) : '0';
+const isPartialRun = skipped > 0;
 
 // Meta
-document.title = `Skill Eval — ${data.skill} — ${data.timestamp}`;
+document.title = `Eval — ${data.timestamp}`;
 document.getElementById('meta').innerHTML =
-  `<strong>${escHtml(data.skill)}</strong> &middot; ${escHtml(data.timestamp)} &middot; ${(data.totalDuration / 1000).toFixed(1)}s total`;
+  `${escHtml(data.timestamp)} &middot; ${(data.totalDuration / 1000).toFixed(1)}s total` +
+  (isPartialRun ? ` &middot; <span style="color:var(--skipped)">⚠️ Partial run (interrupted)</span>` : '');
 
 // Cards
 document.getElementById('cards').innerHTML = [
@@ -293,8 +299,9 @@ document.getElementById('cards').innerHTML = [
   { value: partial, label: 'Partial', color: 'var(--partial)', filter: 'partial' },
   { value: fail, label: 'Failed', color: 'var(--fail)', filter: 'fail' },
   { value: errored, label: 'Errors', color: 'var(--error)', filter: 'error' },
+  ...(skipped > 0 ? [{ value: skipped, label: 'Skipped', color: 'var(--skipped)', filter: 'skipped' }] : []),
   { value: avgScore, label: 'Avg Score' },
-  { value: passRate + '%', label: 'Pass Rate' },
+  { value: passRate + '%', label: `Pass Rate${isPartialRun ? ` (${scored})` : ''}` },
 ].map(c => {
   const clickable = c.filter ? ' clickable-card' + (c.filter === 'all' ? ' card-active' : '') : '';
   const dataAttr = c.filter ? ` data-card-filter="${c.filter}"` : '';
@@ -316,6 +323,7 @@ const segments = [
   { count: partial, color: 'var(--partial)' },
   { count: fail, color: 'var(--fail)' },
   { count: errored, color: 'var(--error)' },
+  { count: skipped, color: 'var(--skipped)' },
   { count: noJudge, color: 'var(--border)' },
 ];
 document.getElementById('bar').innerHTML = segments
@@ -324,7 +332,7 @@ document.getElementById('bar').innerHTML = segments
   .join('');
 
 // Verdict filters
-const verdicts = ['all', 'pass', 'partial', 'fail', 'error'];
+const verdicts = ['all', 'pass', 'partial', 'fail', 'error', ...(skipped > 0 ? ['skipped'] : [])];
 document.getElementById('filters').innerHTML = `<span class="filter-label">Status</span>` + verdicts
   .map(v => `<fluent-button appearance="${v === 'all' ? 'accent' : 'outline'}" data-filter="${v}">${v === 'all' ? 'All' : v.charAt(0).toUpperCase() + v.slice(1)}</fluent-button>`)
   .join('');
@@ -357,6 +365,7 @@ document.getElementById('cat-filters').addEventListener('click', e => {
 });
 
 function getVerdict(ev) {
+  if (ev.skipped) return 'skipped';
   if (ev.error) return 'error';
   return ev.judgment?.verdict || 'none';
 }
@@ -468,18 +477,19 @@ function renderTable() {
   document.getElementById('tbody').innerHTML = filtered.map(ev => {
     const v = getVerdict(ev);
     const badgeClass = 'badge-' + (v === 'none' ? 'error' : v);
-    const label = ev.error ? 'ERROR' : (ev.judgment?.verdict?.toUpperCase() || 'N/A');
+    const label = ev.skipped ? 'SKIPPED' : (ev.error ? 'ERROR' : (ev.judgment?.verdict?.toUpperCase() || 'N/A'));
     const title = escHtml(ev.title);
     const category = escHtml(ev.category || 'Uncategorized');
+    const rowClass = ev.skipped ? 'clickable row-skipped' : 'clickable';
 
-    return `<tr class="clickable" data-eval-index="${ev.index}">
+    return `<tr class="${rowClass}" data-eval-index="${ev.index}">
       <td>${ev.index}</td>
       <td>${category}</td>
       <td class="cell-title">${title}</td>
       <td><fluent-badge class="${badgeClass}">${label}</fluent-badge></td>
     </tr>
     <tr class="detail-row hidden" id="detail-row-${ev.index}">
-      <td colspan="4">${buildDetailPanel(ev)}</td>
+      <td colspan="4">${ev.skipped ? '<div class="detail-panel"><p style="color:var(--skipped)">⏭️ This eval was skipped because the run was interrupted (Ctrl+C).</p></div>' : buildDetailPanel(ev)}</td>
     </tr>`;
   }).join('');
 

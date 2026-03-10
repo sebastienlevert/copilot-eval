@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { runCommand } from "./workspace.js";
 import type { EvalTurn, SkillOutput } from "./types.js";
 
-const COPILOT_LOGS_DIR = join(homedir(), ".copilot", "logs");
+const DEFAULT_COPILOT_LOGS_DIR = join(homedir(), ".copilot", "logs");
 
 /**
  * Detect if the Copilot CLI response indicates rate limiting / throttling.
@@ -15,6 +15,25 @@ export function isThrottled(response: string): boolean {
   if (/throttl/i.test(text)) return true;
   if (/\b429\b/.test(text)) return true;
   if (/too many requests/i.test(text)) return true;
+  return false;
+}
+
+/**
+ * Detect transient errors that should trigger a full eval retry.
+ * Includes CAPiError, network failures, and similar intermittent issues.
+ */
+export function isTransientError(response: string): boolean {
+  if (/CAPiError/i.test(response)) return true;
+  if (/ECONNRESET/i.test(response)) return true;
+  if (/ETIMEDOUT/i.test(response)) return true;
+  if (/ECONNREFUSED/i.test(response)) return true;
+  if (/socket hang up/i.test(response)) return true;
+  if (/network error/i.test(response)) return true;
+  if (/internal server error/i.test(response)) return true;
+  if (/service unavailable/i.test(response)) return true;
+  if (/\b502\b/.test(response)) return true;
+  if (/\b503\b/.test(response)) return true;
+  if (/\b504\b/.test(response)) return true;
   return false;
 }
 
@@ -36,10 +55,10 @@ export function detectSkillUsage(sessionLog: string | null, response: string): b
  * Log files are named process-{timestamp}-{pid}.log.
  * Falls back to latest-by-mtime if no PID match is found.
  */
-async function findProcessLog(pid?: number, afterMs?: number): Promise<string | null> {
+async function findProcessLog(logsDir: string, pid?: number, afterMs?: number): Promise<string | null> {
   let files: string[];
   try {
-    files = await readdir(COPILOT_LOGS_DIR);
+    files = await readdir(logsDir);
   } catch {
     return null;
   }
@@ -51,7 +70,7 @@ async function findProcessLog(pid?: number, afterMs?: number): Promise<string | 
   if (pid) {
     const pidSuffix = `-${pid}.log`;
     const match = processLogs.find((f) => f.endsWith(pidSuffix));
-    if (match) return join(COPILOT_LOGS_DIR, match);
+    if (match) return join(logsDir, match);
   }
 
   // Fallback: latest by mtime (for backward compat / single-concurrency)
@@ -59,7 +78,7 @@ async function findProcessLog(pid?: number, afterMs?: number): Promise<string | 
     let latest: string | null = null;
     let latestMtime = 0;
     for (const file of processLogs) {
-      const filePath = join(COPILOT_LOGS_DIR, file);
+      const filePath = join(logsDir, file);
       const s = await stat(filePath);
       if (s.mtimeMs > afterMs && s.mtimeMs > latestMtime) {
         latest = filePath;
@@ -86,11 +105,14 @@ export async function executeEval(
   evalId: string,
   model?: string,
   onTurnComplete?: (turnIdx: number) => void,
+  configDir?: string,
 ): Promise<SkillOutput> {
   const start = Date.now();
   const beforeExec = Date.now();
+  const copilotLogsDir = configDir ? join(configDir, "logs") : DEFAULT_COPILOT_LOGS_DIR;
 
   const baseArgs = ["--yolo", "--experimental"];
+  if (configDir) baseArgs.push("--config-dir", configDir);
   if (model) baseArgs.push("--model", model);
 
   const prompts = turns.map((t) => t.prompt);
@@ -119,7 +141,7 @@ export async function executeEval(
 
     // Extract session ID from process log after the first turn (use PID for accuracy)
     if (i === 0) {
-      const logPath = await findProcessLog(result.pid, beforeExec);
+      const logPath = await findProcessLog(copilotLogsDir, result.pid, beforeExec);
       if (logPath) {
         const logContent = await readFile(logPath, "utf-8");
         const match = logContent.match(/"session_id":\s*"([a-f0-9-]+)"/);
@@ -132,7 +154,7 @@ export async function executeEval(
 
   // Find and read the Copilot process log (use last turn's PID, fall back to mtime)
   let sessionLog: string | null = null;
-  const processLogPath = await findProcessLog(undefined, beforeExec);
+  const processLogPath = await findProcessLog(copilotLogsDir, undefined, beforeExec);
   if (processLogPath) {
     sessionLog = await readFile(processLogPath, "utf-8");
   }

@@ -26,7 +26,6 @@ function makeEvalResult(overrides?: Partial<EvalResult>): EvalResult {
 
 function makeResults(overrides?: Partial<EvalRunResults>): EvalRunResults {
   return {
-    skill: "test-skill",
     timestamp: "2026-01-01T00:00:00.000Z",
     totalDuration: 5000,
     evalCount: 1,
@@ -57,11 +56,6 @@ function allOutput(): string {
 // printSummary
 // ---------------------------------------------------------------------------
 describe("printSummary", () => {
-  it("prints skill name", () => {
-    printSummary(makeResults({ skill: "my-awesome-skill" }));
-    expect(allOutput()).toContain("my-awesome-skill");
-  });
-
   it("prints timestamp", () => {
     printSummary(makeResults({ timestamp: "2026-03-15T12:00:00Z" }));
     expect(allOutput()).toContain("2026-03-15T12:00:00Z");
@@ -228,9 +222,9 @@ describe("printSummary", () => {
     expect(allOutput()).toContain("─");
   });
 
-  it("prints SKILL EVAL RESULTS header", () => {
+  it("prints EVAL RESULTS header", () => {
     printSummary(makeResults());
-    expect(allOutput()).toContain("SKILL EVAL RESULTS");
+    expect(allOutput()).toContain("EVAL RESULTS");
   });
 
   it("handles multiple evals with mixed verdicts", () => {

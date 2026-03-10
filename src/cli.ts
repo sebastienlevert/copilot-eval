@@ -2,38 +2,15 @@
 
 import { Command } from "commander";
 import { resolve, join } from "node:path";
-import { existsSync, readdirSync, writeFileSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { existsSync, readdirSync } from "node:fs";
+import { mkdir, writeFile, symlink, realpath } from "node:fs/promises";
 import { createWorkspace, loadEvals, saveResults, runScript, type ScriptVariables } from "./lib/workspace.js";
-import { executeEval, isThrottled } from "./lib/runner.js";
+import { executeEval, isThrottled, isTransientError } from "./lib/runner.js";
 import { judgeEval } from "./lib/judge.js";
 import { printSummary, buildSummary } from "./lib/reporter.js";
 import { generateDashboard } from "./lib/dashboard.js";
 import { initEvalProject } from "./lib/init.js";
 import type { EvalCase, EvalResult, EvalRunResults, EvalsFile } from "./lib/types.js";
-
-const COPILOT_DIR = join(homedir(), ".copilot");
-
-/** Recursively search for a directory named `skillName` anywhere under `baseDir`. */
-function findSkillPath(baseDir: string, skillName: string): string | null {
-  // Check direct child first (fast path for ~/.copilot/skills/<name>, ~/.copilot/plugins/<name>, etc.)
-  if (!existsSync(baseDir)) return null;
-
-  const entries = readdirSync(baseDir, { withFileTypes: true });
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    if (entry.name === skillName) return join(baseDir, entry.name);
-  }
-  // Recurse into subdirectories (skip node_modules, logs, session-state, runs)
-  const SKIP = new Set(["node_modules", "logs", "session-state", "runs"]);
-  for (const entry of entries) {
-    if (!entry.isDirectory() || SKIP.has(entry.name)) continue;
-    const found = findSkillPath(join(baseDir, entry.name), skillName);
-    if (found) return found;
-  }
-  return null;
-}
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -157,7 +134,6 @@ program
   });
 
 interface RunOptions {
-  skill: string;
   eval?: string;
   category?: string;
   filter?: string;
@@ -165,13 +141,13 @@ interface RunOptions {
   skipJudge: boolean;
   concurrency: string;
   model: string;
+  judgeModel: string;
   verbose: boolean;
 }
 
 program
   .command("run")
   .description("Run evals from the current eval project directory")
-  .requiredOption("-s, --skill <name>", "Skill name (searches recursively in ~/.copilot/)")
   .option("-e, --eval <index>", "Run a specific eval by index (0-based)")
   .option("--category <name>", "Run evals in a specific category")
   .option("-f, --filter <pattern>", "Run evals matching a prompt pattern")
@@ -179,7 +155,8 @@ program
   .option("--skip-judge", "Skip the judging step", false)
   .option("-v, --verbose", "Print all script output and phase changes", false)
   .option("-c, --concurrency <n>", "Number of evals to run in parallel", "5")
-  .option("-m, --model <model>", "Copilot CLI model to use", "claude-opus-4.6")
+  .option("-m, --model <model>", "Copilot CLI model to use for evals", "claude-opus-4.6")
+  .option("--judge-model <model>", "Copilot CLI model to use for judging", "gpt-4.1")
   .action(async (opts: RunOptions) => {
     const projectDir = process.cwd();
     const concurrency = parseInt(opts.concurrency, 10);
@@ -211,14 +188,6 @@ program
       process.exit(1);
     }
 
-    // Validate skill is installed
-    const skillPath = findSkillPath(COPILOT_DIR, opts.skill);
-    if (!skillPath) {
-      logErr(`❌ Skill "${opts.skill}" not found in ${COPILOT_DIR} (searched recursively)`);
-      process.exit(1);
-    }
-    log(`✅ Skill "${opts.skill}": ${skillPath}`);
-
     // Create a sequentially numbered run directory: YYYY-MM-DD-NNN
     const runsDir = join(projectDir, "runs");
     const datePrefix = new Date().toISOString().slice(0, 10);
@@ -239,22 +208,46 @@ program
     await mkdir(join(runDir, "workspaces"), { recursive: true });
     log(`📂 Run directory: ${runDir}`);
 
-    // Save log on interrupt (Ctrl+C)
+    // Graceful interrupt: set flag, let pool drain, produce partial report
+    let interrupted = false;
     const onInterrupt = () => {
-      logErr(`⚠️  Interrupted — saving log`);
-      const logPath = join(runDir, `${runTag}.log`);
-      try {
-        writeFileSync(logPath, logBuffer.join("\n") + "\n");
-        console.error(`📝 Run log saved to ${logPath}`);
-      } catch {}
-      process.exit(130);
+      if (interrupted) {
+        // Second Ctrl+C: force exit
+        logErr(`⚠️  Force exit`);
+        process.exit(130);
+      }
+      interrupted = true;
+      logErr(`\n⚠️  Interrupted — finishing in-flight evals and generating partial report…`);
     };
     process.on("SIGINT", onInterrupt);
     process.on("SIGTERM", onInterrupt);
 
-    log(`🔍 Evals file: ${projectDir}/evals.yml`);
+    log(`🔍 Evals file: ${projectDir}/evals.yaml`);
     const evalsFile: EvalsFile = await loadEvals(projectDir);
     let evals: EvalCase[] = evalsFile.evals;
+
+    // Set up isolated config dir if plugins are specified
+    let configDir: string | undefined;
+    if (evalsFile.plugins && evalsFile.plugins.length > 0) {
+      configDir = join(runDir, ".copilot");
+      await mkdir(join(configDir, "installed-plugins", "_eval"), { recursive: true });
+      await mkdir(join(configDir, "logs"), { recursive: true });
+
+      for (const pluginPath of evalsFile.plugins) {
+        // Resolve absolute or relative-to-evals-file paths
+        const resolvedPath = resolve(projectDir, pluginPath);
+        const realSource = await realpath(resolvedPath).catch(() => {
+          logErr(`❌ Plugin path not found: ${resolvedPath} (from "${pluginPath}")`);
+          process.exit(1);
+          return ""; // unreachable
+        });
+        const pluginName = resolvedPath.split("/").pop()!;
+        const targetPath = join(configDir, "installed-plugins", "_eval", pluginName);
+        await symlink(realSource, targetPath);
+        log(`🔗 Plugin "${pluginName}": ${realSource}`);
+      }
+      log(`🔒 Isolated config dir: ${configDir} (${evalsFile.plugins.length} plugin(s))`);
+    }
 
     if (opts.eval !== undefined) {
       const idx = parseInt(opts.eval, 10);
@@ -287,12 +280,20 @@ program
     // Global setup
     if (evalsFile.scripts?.setup) {
       log(`🔧 Running global setup script`);
-      const setupResult = await runScript(evalsFile.scripts.setup, projectDir, globalVars);
-      const setupOut = (setupResult.stdout + setupResult.stderr).trim();
-      if (setupOut) {
-        for (const ln of setupOut.split("\n")) {
-          logOut(ln);
+      try {
+        const setupResult = await runScript(evalsFile.scripts.setup, projectDir, globalVars);
+        const setupOut = (setupResult.stdout + setupResult.stderr).trim();
+        if (setupOut) {
+          for (const ln of setupOut.split("\n")) {
+            logOut(ln);
+          }
         }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        logErr(`❌ Global setup failed — aborting run`);
+        logErr(`   ${message}`);
+        await writeFile(join(runDir, `${runTag}.log`), logBuffer.join("\n") + "\n");
+        process.exit(1);
       }
     }
 
@@ -300,6 +301,28 @@ program
     const MAX_RETRIES = 3;
     const BACKOFF_BASE_MS = 15_000;
     const display = createLiveDisplay(evals.length, opts.verbose, logBuffer);
+
+    // Incremental flush: save partial results/log/dashboard after each eval
+    const resultsPath = opts.output
+      ? join(resolve(opts.output, ".."), `${runTag}.json`)
+      : join(runDir, `${runTag}.json`);
+    const dashboardOutputPath = join(runDir, `${runTag}.html`);
+    const logPath = join(runDir, `${runTag}.log`);
+
+    async function flushResults() {
+      const sorted = [...evalResults].sort((a, b) => a.index - b.index);
+      const partial: EvalRunResults = {
+        timestamp: new Date().toISOString(),
+        totalDuration: Date.now() - startTime,
+        evalCount: sorted.length,
+        evals: sorted,
+      };
+      await Promise.all([
+        writeFile(resultsPath, JSON.stringify(partial, null, 2)),
+        generateDashboard(runDir, `${runTag}.html`, partial),
+        writeFile(logPath, logBuffer.join("\n") + "\n"),
+      ]);
+    }
 
     // Worker pool: keeps `concurrency` slots filled at all times
     type QueueItem = { evalCase: EvalCase; evalIdx: number; retries: number };
@@ -331,11 +354,26 @@ program
           if (evalSetupCmd) {
             display.update(evalIdx, "Setup");
             const evalVars: ScriptVariables = { ...globalVars, workspaceId: workspace.id, workspaceDir: workspace.dir };
-            const setupResult = await runScript(evalSetupCmd, projectDir, evalVars);
-            const setupOut = (setupResult.stdout + setupResult.stderr).trim();
-            if (setupOut) {
-              display.log(evalIdx, setupOut);
-              display.update(evalIdx, `Setup done`);
+            try {
+              const setupResult = await runScript(evalSetupCmd, projectDir, evalVars);
+              const setupOut = (setupResult.stdout + setupResult.stderr).trim();
+              if (setupOut) {
+                display.log(evalIdx, setupOut);
+                display.update(evalIdx, `Setup done`);
+              }
+            } catch (err) {
+              const message = err instanceof Error ? err.message : String(err);
+              display.finish(evalIdx, "💥", "Setup failed");
+              return {
+                index: evalIdx,
+                sessionId: evalId,
+                title: evalCase.title,
+                turns: evalCase.turns,
+                category: evalCase.category,
+                error: `Setup script failed: ${message}`,
+                duration: 0,
+                judgment: null,
+              };
             }
           }
 
@@ -350,6 +388,7 @@ program
             (turnIdx) => {
               display.update(evalIdx, `Turn ${turnIdx + 1}/${evalCase.turns.length} done`);
             },
+            configDir,
           );
 
           // Check for throttling
@@ -374,20 +413,42 @@ program
             };
           }
 
+          // Check for transient errors (CAPiError, network failures, etc.)
+          if (isTransientError(skillOutput.response)) {
+            if (retries < MAX_RETRIES) {
+              retries++;
+              const backoffMs = BACKOFF_BASE_MS * Math.pow(2, retries - 1);
+              display.update(evalIdx, `Transient error — retry ${retries} in ${(backoffMs / 1000).toFixed(0)}s`);
+              await new Promise((r) => setTimeout(r, backoffMs));
+              continue;
+            }
+            display.finish(evalIdx, "💥", "Transient error (max retries)");
+            return {
+              index: evalIdx,
+              sessionId: evalId,
+              title: evalCase.title,
+              turns: evalCase.turns,
+              category: evalCase.category,
+              error: "Transient error after max retries: " + skillOutput.response.slice(0, 200),
+              duration: skillOutput.duration,
+              judgment: null,
+            };
+          }
+
           const skillTag = skillOutput.skillUsed ? "" : " [no skill]";
 
           // Judge
           let judgment = null;
           if (!opts.skipJudge) {
             display.update(evalIdx, `Judging${skillTag}`);
-            judgment = await judgeEval(evalCase, skillOutput, opts.model);
+            judgment = await judgeEval(evalCase, skillOutput, opts.judgeModel);
 
-            // Check if judge was throttled
-            if (judgment.score === 0 && isThrottled(judgment.reasoning)) {
+            // Check if judge was throttled or hit transient error
+            if (judgment.score === 0 && (isThrottled(judgment.reasoning) || isTransientError(judgment.reasoning))) {
               if (retries < MAX_RETRIES) {
                 retries++;
                 const backoffMs = BACKOFF_BASE_MS * Math.pow(2, retries - 1);
-                display.update(evalIdx, `Judge throttled — backoff ${(backoffMs / 1000).toFixed(0)}s`);
+                display.update(evalIdx, `Judge error — retry ${retries} in ${(backoffMs / 1000).toFixed(0)}s`);
                 await new Promise((r) => setTimeout(r, backoffMs));
                 continue;
               }
@@ -471,13 +532,15 @@ program
     const poolDone = new Promise<void>((r) => (poolResolve = r));
 
     function launchNext() {
-      if (idx >= queue.length) {
+      // Stop launching new evals if interrupted
+      if (interrupted || idx >= queue.length) {
         if (active.size === 0) poolResolve();
         return;
       }
       const item = queue[idx++];
-      const p = processItem(item).then((result) => {
+      const p = processItem(item).then(async (result) => {
         evalResults.push(result);
+        await flushResults().catch(() => {}); // best-effort incremental save
         active.delete(p);
         launchNext();
       });
@@ -490,6 +553,27 @@ program
     }
     await poolDone;
     display.stop();
+
+    // Add skipped results for evals that never started
+    const completedIndices = new Set(evalResults.map((r) => r.index));
+    for (let i = 0; i < evals.length; i++) {
+      if (!completedIndices.has(i)) {
+        evalResults.push({
+          index: i,
+          title: evals[i].title,
+          turns: evals[i].turns,
+          category: evals[i].category,
+          error: "Skipped (interrupted)",
+          duration: 0,
+          judgment: null,
+          skipped: true,
+        });
+      }
+    }
+
+    if (interrupted) {
+      log(`⚠️  Run interrupted — ${completedIndices.size}/${evals.length} evals completed`);
+    }
 
     // Global teardown
     if (evalsFile.scripts?.teardown) {
@@ -512,7 +596,6 @@ program
     evalResults.sort((a, b) => a.index - b.index);
 
     const results: EvalRunResults = {
-      skill: opts.skill,
       timestamp: new Date().toISOString(),
       totalDuration: Date.now() - startTime,
       evalCount: evalResults.length,
@@ -523,18 +606,20 @@ program
     console.log(summary);
     logBuffer.push(summary);
 
-    const savedPath = opts.output
-      ? await saveResults(resolve(opts.output, ".."), results, `${runTag}.json`)
-      : await saveResults(runDir, results, `${runTag}.json`);
-    log(`💾 Results: ${savedPath}`);
+    // Final save (overwrites incremental files with complete data)
+    await saveResults(
+      opts.output ? resolve(opts.output, "..") : runDir,
+      results,
+      `${runTag}.json`,
+    );
+    log(`💾 Results: ${resultsPath}`);
 
-    const dashboardPath = await generateDashboard(runDir, `${runTag}.html`, results);
-    log(`📊 Dashboard: ${dashboardPath}`);
+    await generateDashboard(runDir, `${runTag}.html`, results);
+    log(`📊 Dashboard: ${dashboardOutputPath}`);
 
     // Save run log
     process.removeListener("SIGINT", onInterrupt);
     process.removeListener("SIGTERM", onInterrupt);
-    const logPath = join(runDir, `${runTag}.log`);
     await writeFile(logPath, logBuffer.join("\n") + "\n");
     log(`📝 Log: ${logPath}`);
   });

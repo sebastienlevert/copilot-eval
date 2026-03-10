@@ -23,13 +23,17 @@ export interface EvalCase {
 }
 
 /**
- * Top-level structure of evals.yml.
+ * Top-level structure of evals.yaml.
  * Supports both the new object format and legacy bare-array format.
  */
 export interface EvalsFile {
   $schema?: string;
   /** Global setup/teardown shell commands (run once before/after all evals) */
   scripts?: EvalScripts;
+  /** Plugin/skill folder names to include in an isolated config dir.
+   *  When set, only these plugins are available during the run.
+   *  Names are resolved recursively from ~/.copilot/. */
+  plugins?: string[];
   evals: EvalCase[];
 }
 
@@ -77,10 +81,11 @@ export interface EvalResult {
   skillUsed?: boolean;
   judgment: Judgment | null;
   error?: string;
+  /** True when this eval was never started due to an interrupt (Ctrl+C) */
+  skipped?: boolean;
 }
 
 export interface EvalRunResults {
-  skill: string;
   timestamp: string;
   totalDuration: number;
   evalCount: number;

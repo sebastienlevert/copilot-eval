@@ -29,6 +29,8 @@ export async function createWorkspace(baseDir?: string): Promise<{ dir: string; 
   const id = randomUUID();
   const dir = join(parent, id);
   await mkdir(dir, { recursive: true });
+  // Sentinel prevents git from traversing up to the repo root
+  await writeFile(join(dir, ".git"), "");
   return { dir, id };
 }
 

@@ -2,10 +2,37 @@ import { mkdtemp, readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import { parse as parseYaml } from "yaml";
 import type { CommandResult, EvalCase, EvalsFile, EvalRunResults, RunCommandOptions } from "./types.js";
 
+/**
+ * Resolve a command name to its full path on Windows (handles .cmd, .bat, .exe).
+ * On non-Windows platforms, returns the command as-is.
+ */
+function resolveCommand(command: string): string {
+  if (process.platform !== "win32") return command;
+  try {
+    const results = execFileSync("where.exe", [command], { encoding: "utf8" })
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    // Prefer .cmd or .exe over extensionless shims
+    const cmdOrExe = results.find((r) => /\.(cmd|exe|bat)$/i.test(r));
+    return cmdOrExe || results[0] || command;
+  } catch {
+    return command;
+  }
+}
+
+/**
+ * On Windows with shell: true, args with spaces must be manually quoted
+ * because cmd.exe doesn't auto-quote them.
+ */
+function quoteArgsForWindows(args: string[]): string[] {
+  if (process.platform !== "win32") return args;
+  return args.map((a) => (a.includes(" ") ? `"${a}"` : a));
+}
 export interface InteractiveResult {
   code: number | null;
   stdout: string;
@@ -45,11 +72,12 @@ export function runCommand(
   const { timeout = 120_000, cwd, input, env } = options;
 
   return new Promise((resolve, reject) => {
-    const proc = spawn(command, args, {
+    const isWindows = process.platform === "win32";
+    const proc = spawn(resolveCommand(command), isWindows ? quoteArgsForWindows(args) : args, {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
       env: env ? { ...process.env, ...env } : undefined,
-      shell: process.platform === "win32",
+      shell: isWindows,
     });
 
     let stdout = "";
@@ -102,10 +130,11 @@ export function runInteractiveCommand(
   const IDLE_MS = 10_000;
 
   return new Promise((resolve, reject) => {
-    const proc = spawn(command, args, {
+    const isWindows = process.platform === "win32";
+    const proc = spawn(resolveCommand(command), isWindows ? quoteArgsForWindows(args) : args, {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
-      shell: process.platform === "win32",
+      shell: isWindows,
     });
 
     let fullStdout = "";

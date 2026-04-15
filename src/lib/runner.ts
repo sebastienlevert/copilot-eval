@@ -106,6 +106,7 @@ export async function executeEval(
   model?: string,
   onTurnComplete?: (turnIdx: number) => void,
   configDir?: string,
+  pluginDirs?: string[],
 ): Promise<SkillOutput> {
   const start = Date.now();
   const beforeExec = Date.now();
@@ -113,6 +114,11 @@ export async function executeEval(
 
   const baseArgs = ["--yolo", "--experimental"];
   if (configDir) baseArgs.push("--config-dir", configDir);
+  if (pluginDirs) {
+    for (const dir of pluginDirs) {
+      baseArgs.push("--plugin-dir", dir);
+    }
+  }
   if (model) baseArgs.push("--model", model);
 
   const prompts = turns.map((t) => t.prompt);

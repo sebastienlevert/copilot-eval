@@ -235,11 +235,11 @@ program
     const evalsFile: EvalsFile = await loadEvals(projectDir, evalFilePath);
     let evals: EvalCase[] = evalsFile.evals;
 
-    // Set up isolated config dir if plugins are specified
+    // Set up isolated config dir and collect plugin dirs if plugins are specified
     let configDir: string | undefined;
+    const pluginDirs: string[] = [];
     if (evalsFile.plugins && evalsFile.plugins.length > 0) {
       configDir = join(runDir, ".copilot");
-      await mkdir(join(configDir, "installed-plugins", "_eval"), { recursive: true });
       await mkdir(join(configDir, "logs"), { recursive: true });
 
       for (const pluginPath of evalsFile.plugins) {
@@ -252,8 +252,7 @@ program
           return ""; // unreachable
         });
         const pluginName = resolvedPath.replace(/[\\/]/g, "/").split("/").pop()!;
-        const targetPath = join(configDir, "installed-plugins", "_eval", pluginName);
-        await symlink(realSource, targetPath);
+        pluginDirs.push(realSource);
         log(`🔗 Plugin "${pluginName}": ${realSource}`);
       }
       log(`🔒 Isolated config dir: ${configDir} (${evalsFile.plugins.length} plugin(s))`);
@@ -399,6 +398,7 @@ program
               display.update(evalIdx, `Turn ${turnIdx + 1}/${evalCase.turns.length} done`);
             },
             configDir,
+            pluginDirs.length > 0 ? pluginDirs : undefined,
           );
 
           // Check for throttling

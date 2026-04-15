@@ -181,29 +181,35 @@ export function runInteractiveCommand(
 }
 
 /**
- * Load evals from a project directory.
+ * Load evals from a project directory or a specific file.
  * Supports evals.yaml (preferred), evals.yml, and evals.json (legacy fallback).
  * Supports both the new object format ({ evals: [...] }) and the legacy bare-array format.
+ * If `filePath` is provided, loads from that specific file instead of searching.
  */
-export async function loadEvals(skillDir: string): Promise<EvalsFile> {
-  const yamlPath = join(skillDir, "evals.yaml");
-  const ymlPath = join(skillDir, "evals.yml");
-  const jsonPath = join(skillDir, "evals.json");
-
+export async function loadEvals(skillDir: string, filePath?: string): Promise<EvalsFile> {
   let raw: string;
   let isYaml: boolean;
 
-  if (existsSync(yamlPath)) {
-    raw = await readFile(yamlPath, "utf-8");
-    isYaml = true;
-  } else if (existsSync(ymlPath)) {
-    raw = await readFile(ymlPath, "utf-8");
-    isYaml = true;
-  } else if (existsSync(jsonPath)) {
-    raw = await readFile(jsonPath, "utf-8");
-    isYaml = false;
+  if (filePath) {
+    raw = await readFile(filePath, "utf-8");
+    isYaml = filePath.endsWith(".yaml") || filePath.endsWith(".yml");
   } else {
-    throw new Error(`No evals.yaml (or evals.yml / evals.json) found at ${skillDir}`);
+    const yamlPath = join(skillDir, "evals.yaml");
+    const ymlPath = join(skillDir, "evals.yml");
+    const jsonPath = join(skillDir, "evals.json");
+
+    if (existsSync(yamlPath)) {
+      raw = await readFile(yamlPath, "utf-8");
+      isYaml = true;
+    } else if (existsSync(ymlPath)) {
+      raw = await readFile(ymlPath, "utf-8");
+      isYaml = true;
+    } else if (existsSync(jsonPath)) {
+      raw = await readFile(jsonPath, "utf-8");
+      isYaml = false;
+    } else {
+      throw new Error(`No evals.yaml (or evals.yml / evals.json) found at ${skillDir}`);
+    }
   }
 
   const parsed = isYaml ? parseYaml(raw) : JSON.parse(raw);

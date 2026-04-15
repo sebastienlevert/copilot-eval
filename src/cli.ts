@@ -138,6 +138,7 @@ interface RunOptions {
   category?: string;
   filter?: string;
   output?: string;
+  file?: string;
   skipJudge: boolean;
   concurrency: string;
   model: string;
@@ -151,6 +152,7 @@ program
   .option("-e, --eval <index>", "Run a specific eval by index (0-based)")
   .option("--category <name>", "Run evals in a specific category")
   .option("-f, --filter <pattern>", "Run evals matching a prompt pattern")
+  .option("--file <path>", "Use a specific eval file instead of evals.yaml")
   .option("-o, --output <file>", "Save results to a specific file")
   .option("--skip-judge", "Skip the judging step", false)
   .option("-v, --verbose", "Print all script output and phase changes", false)
@@ -182,9 +184,15 @@ program
       console.error(opts.verbose ? line : msg);
     };
 
-    // Validate we're in an eval project
-    if (!existsSync(join(projectDir, "evals.yaml")) && !existsSync(join(projectDir, "evals.yml")) && !existsSync(join(projectDir, "evals.json"))) {
-      logErr("❌ No evals.yaml found in current directory. Run `copilot-eval init` first.");
+    // Validate we're in an eval project (skip if --file is provided)
+    if (opts.file) {
+      const filePath = resolve(projectDir, opts.file);
+      if (!existsSync(filePath)) {
+        logErr(`❌ Eval file not found: ${opts.file}`);
+        process.exit(1);
+      }
+    } else if (!existsSync(join(projectDir, "evals.yaml")) && !existsSync(join(projectDir, "evals.yml")) && !existsSync(join(projectDir, "evals.json"))) {
+      logErr("❌ No evals.yaml found in current directory. Run `copilot-eval init` first, or use --file <path>.");
       process.exit(1);
     }
 
@@ -222,8 +230,9 @@ program
     process.on("SIGINT", onInterrupt);
     process.on("SIGTERM", onInterrupt);
 
-    log(`🔍 Evals file: ${projectDir}/evals.yaml`);
-    const evalsFile: EvalsFile = await loadEvals(projectDir);
+    const evalFilePath = opts.file ? resolve(projectDir, opts.file) : undefined;
+    log(`🔍 Evals file: ${evalFilePath ?? join(projectDir, "evals.yaml")}`);
+    const evalsFile: EvalsFile = await loadEvals(projectDir, evalFilePath);
     let evals: EvalCase[] = evalsFile.evals;
 
     // Set up isolated config dir if plugins are specified

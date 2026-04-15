@@ -243,14 +243,15 @@ program
       await mkdir(join(configDir, "logs"), { recursive: true });
 
       for (const pluginPath of evalsFile.plugins) {
-        // Resolve absolute or relative-to-evals-file paths
-        const resolvedPath = resolve(projectDir, pluginPath);
+        // Resolve relative to the eval file's directory when --file is used, otherwise CWD
+        const baseDir = evalFilePath ? resolve(evalFilePath, "..") : projectDir;
+        const resolvedPath = resolve(baseDir, pluginPath);
         const realSource = await realpath(resolvedPath).catch(() => {
           logErr(`❌ Plugin path not found: ${resolvedPath} (from "${pluginPath}")`);
           process.exit(1);
           return ""; // unreachable
         });
-        const pluginName = resolvedPath.split("/").pop()!;
+        const pluginName = resolvedPath.replace(/[\\/]/g, "/").split("/").pop()!;
         const targetPath = join(configDir, "installed-plugins", "_eval", pluginName);
         await symlink(realSource, targetPath);
         log(`🔗 Plugin "${pluginName}": ${realSource}`);

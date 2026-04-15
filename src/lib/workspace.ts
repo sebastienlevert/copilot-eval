@@ -49,6 +49,7 @@ export function runCommand(
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
       env: env ? { ...process.env, ...env } : undefined,
+      shell: process.platform === "win32",
     });
 
     let stdout = "";
@@ -104,6 +105,7 @@ export function runInteractiveCommand(
     const proc = spawn(command, args, {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
+      shell: process.platform === "win32",
     });
 
     let fullStdout = "";
@@ -273,7 +275,11 @@ export async function runScript(
   if (vars.workspaceId) env.COPILOT_EVAL_WORKSPACE_ID = vars.workspaceId;
   if (vars.workspaceDir) env.COPILOT_EVAL_WORKSPACE_DIR = vars.workspaceDir;
 
-  const result = await runCommand("sh", ["-c", resolved], {
+  const isWindows = process.platform === "win32";
+  const shell = isWindows ? "cmd" : "sh";
+  const shellArgs = isWindows ? ["/c", resolved] : ["-c", resolved];
+
+  const result = await runCommand(shell, shellArgs, {
     cwd,
     timeout: 300_000,
     env,

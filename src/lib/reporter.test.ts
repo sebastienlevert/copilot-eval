@@ -294,4 +294,56 @@ describe("printSummary", () => {
     }));
     expect(allOutput()).toContain("ERR");
   });
+
+  it("excludes errored evals from average score", () => {
+    // 2 passed at 80, 1 errored — average should be 80 (not 53.3 which would
+    // include the errored eval as a zero).
+    printSummary(makeResults({
+      evals: [
+        makeEvalResult({ judgment: makeJudgment({ score: 80 }) }),
+        makeEvalResult({ judgment: makeJudgment({ score: 80 }) }),
+        makeEvalResult({ error: "transient", judgment: null }),
+      ],
+    }));
+    const output = allOutput();
+    expect(output).toContain("80.0/100");
+    expect(output).not.toContain("53.3");
+  });
+
+  it("excludes errored evals from pass rate", () => {
+    // 1 pass, 1 fail, 1 error — pass rate is 50% (1/2 scored), not 33.3%.
+    printSummary(makeResults({
+      evals: [
+        makeEvalResult({ judgment: makeJudgment({ verdict: "pass" }) }),
+        makeEvalResult({ judgment: makeJudgment({ verdict: "fail" }) }),
+        makeEvalResult({ error: "transient", judgment: null }),
+      ],
+    }));
+    const output = allOutput();
+    expect(output).toContain("Pass Rate:          50.0%");
+    expect(output).not.toContain("33.3%");
+  });
+
+  it("annotates average score with scored count when errors are present", () => {
+    printSummary(makeResults({
+      evals: [
+        makeEvalResult({ judgment: makeJudgment({ score: 80 }) }),
+        makeEvalResult({ error: "transient", judgment: null }),
+      ],
+    }));
+    // Should indicate only 1 eval contributed to the score.
+    expect(allOutput()).toContain("(1 scored)");
+  });
+
+  it("reports 0 avg and 0% pass rate when all evals error", () => {
+    printSummary(makeResults({
+      evals: [
+        makeEvalResult({ error: "transient a", judgment: null }),
+        makeEvalResult({ error: "transient b", judgment: null }),
+      ],
+    }));
+    const output = allOutput();
+    expect(output).toContain("0.0/100");
+    expect(output).toContain("0.0%");
+  });
 });

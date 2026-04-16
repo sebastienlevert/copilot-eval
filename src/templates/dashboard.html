@@ -280,11 +280,11 @@ const partial = evals.filter(e => e.judgment?.verdict === 'partial').length;
 const fail = evals.filter(e => e.judgment?.verdict === 'fail').length;
 const skipped = evals.filter(e => e.skipped).length;
 const errored = evals.filter(e => e.error && !e.skipped).length;
-const scored = total - skipped;
-const noJudge = scored - pass - partial - fail - errored;
-const avgScore = scored ? (evals.filter(e => !e.skipped).reduce((s, e) => s + (e.judgment?.score ?? 0), 0) / scored).toFixed(1) : '0';
+const scored = total - skipped - errored;
+const noJudge = scored - pass - partial - fail;
+const avgScore = scored ? (evals.filter(e => !e.skipped && !e.error).reduce((s, e) => s + (e.judgment?.score ?? 0), 0) / scored).toFixed(1) : '0';
 const passRate = scored ? ((pass / scored) * 100).toFixed(1) : '0';
-const isPartialRun = skipped > 0;
+const isPartialRun = skipped > 0 || errored > 0;
 
 // Meta
 document.title = `Eval — ${data.timestamp}`;

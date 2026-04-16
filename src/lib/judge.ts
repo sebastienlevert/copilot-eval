@@ -14,7 +14,16 @@ export async function judgeEval(
 ): Promise<Judgment> {
   const judgingPrompt = buildJudgingPrompt(evalCase, skillOutput);
 
-  const args = ["--yolo", "--experimental"];
+  // Judge needs no tools — it only evaluates text.
+  // Without these flags, all MCP servers / plugins load and can exceed the
+  // API's 128-tool limit, causing "could not parse judge response" failures.
+  const args = [
+    "--yolo",
+    "--experimental",
+    "--available-tools=",       // no tools at all
+    "--disable-builtin-mcps",   // skip GitHub MCP server
+    "--no-custom-instructions", // skip project instructions
+  ];
   if (model) args.push("--model", model);
 
   const result = await runCommand(

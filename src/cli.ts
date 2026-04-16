@@ -5,7 +5,7 @@ import { resolve, join } from "node:path";
 import { existsSync, readdirSync } from "node:fs";
 import { mkdir, writeFile, symlink, realpath } from "node:fs/promises";
 import { createWorkspace, loadEvals, saveResults, runScript, type ScriptVariables } from "./lib/workspace.js";
-import { executeEval, isThrottled, isTransientError } from "./lib/runner.js";
+import { executeEval, isThrottled, isTransientError, shouldRetryRun } from "./lib/runner.js";
 import { judgeEval } from "./lib/judge.js";
 import { printSummary, buildSummary } from "./lib/reporter.js";
 import { generateDashboard } from "./lib/dashboard.js";
@@ -401,8 +401,10 @@ program
             pluginDirs.length > 0 ? pluginDirs : undefined,
           );
 
-          // Check for throttling
-          if (isThrottled(skillOutput.response)) {
+          // Check for throttling (only retry if the CLI itself didn't
+          // finish cleanly — a clean exit means the CLI was not throttled,
+          // even if the agent narrated "rate limit" to the user).
+          if (skillOutput.exitCode !== 0 && isThrottled(skillOutput.response)) {
             if (retries < MAX_RETRIES) {
               retries++;
               const backoffMs = BACKOFF_BASE_MS * Math.pow(2, retries - 1);
@@ -417,14 +419,16 @@ program
               title: evalCase.title,
               turns: evalCase.turns,
               category: evalCase.category,
-              error: "Throttled after max retries",
+              error: `Throttled after max retries (exit ${skillOutput.exitCode})`,
               duration: skillOutput.duration,
               judgment: null,
             };
           }
 
-          // Check for transient errors (CAPiError, network failures, etc.)
-          if (isTransientError(skillOutput.response)) {
+          // Check for transient infrastructure errors. Gated on exit code so
+          // that an agent narrating a backend 500 in an otherwise successful
+          // run is NOT treated as a retry candidate.
+          if (shouldRetryRun(skillOutput.response, skillOutput.exitCode)) {
             if (retries < MAX_RETRIES) {
               retries++;
               const backoffMs = BACKOFF_BASE_MS * Math.pow(2, retries - 1);
@@ -439,7 +443,7 @@ program
               title: evalCase.title,
               turns: evalCase.turns,
               category: evalCase.category,
-              error: "Transient error after max retries: " + skillOutput.response.slice(0, 200),
+              error: `Transient error after max retries (exit ${skillOutput.exitCode}): ` + skillOutput.response.slice(0, 200),
               duration: skillOutput.duration,
               judgment: null,
             };

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { detectSkillUsage, isThrottled } from "./runner.js";
+import { detectSkillUsage, isThrottled, isTransientError, shouldRetryRun } from "./runner.js";
 
 // ---------------------------------------------------------------------------
 // detectSkillUsage
@@ -195,5 +195,94 @@ describe("isThrottled", () => {
 
   it("returns false for 'skill' or 'limit' alone", () => {
     expect(isThrottled("the skill has a limit")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isTransientError
+// ---------------------------------------------------------------------------
+describe("isTransientError", () => {
+  it("detects CAPiError", () => {
+    expect(isTransientError("CAPiError: upstream failure")).toBe(true);
+  });
+
+  it("detects ECONNRESET", () => {
+    expect(isTransientError("Error: ECONNRESET")).toBe(true);
+  });
+
+  it("detects ETIMEDOUT", () => {
+    expect(isTransientError("ETIMEDOUT connecting to host")).toBe(true);
+  });
+
+  it("detects ECONNREFUSED", () => {
+    expect(isTransientError("connect ECONNREFUSED 127.0.0.1:443")).toBe(true);
+  });
+
+  it("detects EPIPE", () => {
+    expect(isTransientError("write EPIPE")).toBe(true);
+  });
+
+  it("detects 'socket hang up'", () => {
+    expect(isTransientError("socket hang up")).toBe(true);
+  });
+
+  it("does NOT match 'internal server error' narrated by the agent", () => {
+    const narrated =
+      "⚠️ Provisioning hit a transient Microsoft 365 500 Internal Server Error. Retry later.";
+    expect(isTransientError(narrated)).toBe(false);
+  });
+
+  it("does NOT match bare HTTP status codes narrated by the agent", () => {
+    expect(isTransientError("server returned 502 Bad Gateway")).toBe(false);
+    expect(isTransientError("503 service unavailable")).toBe(false);
+    expect(isTransientError("504 gateway timeout")).toBe(false);
+  });
+
+  it("does NOT match 'service unavailable' narrated by the agent", () => {
+    expect(isTransientError("The service is currently unavailable")).toBe(false);
+  });
+
+  it("returns false for empty input", () => {
+    expect(isTransientError("")).toBe(false);
+  });
+
+  it("returns false for a successful response", () => {
+    expect(isTransientError("✅ Agent validated successfully")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// shouldRetryRun
+// ---------------------------------------------------------------------------
+describe("shouldRetryRun", () => {
+  it("does NOT retry on clean exit, even if agent narrates a backend error", () => {
+    const narrated =
+      "Validation passed. ⚠️ Provisioning hit a transient 500 Internal Server Error. Retry later.";
+    expect(shouldRetryRun(narrated, 0)).toBe(false);
+  });
+
+  it("does NOT retry on clean exit with empty response", () => {
+    // Clean exit implies the CLI finished intentionally; trust it.
+    expect(shouldRetryRun("", 0)).toBe(false);
+  });
+
+  it("retries on non-zero exit with transient signature", () => {
+    expect(shouldRetryRun("ECONNRESET while streaming", 1)).toBe(true);
+  });
+
+  it("retries on non-zero exit with empty/short response (CLI crash)", () => {
+    expect(shouldRetryRun("", 1)).toBe(true);
+    expect(shouldRetryRun("short", 1)).toBe(true);
+  });
+
+  it("does NOT retry on non-zero exit with a non-transient, substantive response", () => {
+    // CLI exited with an error but produced a real response — likely a
+    // skill-side failure the judge should evaluate, not an infra flake.
+    const response = "a".repeat(200) + " skill failed with validation errors";
+    expect(shouldRetryRun(response, 1)).toBe(false);
+  });
+
+  it("retries when exitCode is null (process never closed / crashed)", () => {
+    expect(shouldRetryRun("", null)).toBe(true);
   });
 });

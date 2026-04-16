@@ -8,6 +8,12 @@ const DEFAULT_COPILOT_LOGS_DIR = join(homedir(), ".copilot", "logs");
 
 /**
  * Detect if the Copilot CLI response indicates rate limiting / throttling.
+ *
+ * These patterns are intentionally narrow and CLI-focused. Agents sometimes
+ * narrate "rate limit" or "429" to the end user when describing a downstream
+ * service failure (not the CLI's own model call). Throttling detection is
+ * therefore paired with a non-zero `exitCode` in the caller — a clean exit
+ * means the CLI itself was not throttled, regardless of what the agent wrote.
  */
 export function isThrottled(response: string): boolean {
   const text = response.toLowerCase();
@@ -20,20 +26,41 @@ export function isThrottled(response: string): boolean {
 
 /**
  * Detect transient errors that should trigger a full eval retry.
- * Includes CAPiError, network failures, and similar intermittent issues.
+ *
+ * Only infrastructure-level failures belong here — node/OS-level network
+ * errors and CAPiError (copilot CLI internal error signature). HTTP 5xx
+ * codes and phrases like "internal server error" or "service unavailable"
+ * are deliberately NOT matched: agents commonly narrate these to the user
+ * when reporting a downstream service failure in an otherwise successful
+ * run (e.g. "⚠️ Provisioning hit a transient 500 error..."), and retrying
+ * a successful eval wastes minutes and produces false-positive errors.
+ *
+ * If the agent narrates a backend failure, that's a skill-quality signal
+ * the judge should evaluate — not something to retry around.
  */
 export function isTransientError(response: string): boolean {
   if (/CAPiError/i.test(response)) return true;
   if (/ECONNRESET/i.test(response)) return true;
   if (/ETIMEDOUT/i.test(response)) return true;
   if (/ECONNREFUSED/i.test(response)) return true;
+  if (/EPIPE/i.test(response)) return true;
   if (/socket hang up/i.test(response)) return true;
-  if (/network error/i.test(response)) return true;
-  if (/internal server error/i.test(response)) return true;
-  if (/service unavailable/i.test(response)) return true;
-  if (/\b502\b/.test(response)) return true;
-  if (/\b503\b/.test(response)) return true;
-  if (/\b504\b/.test(response)) return true;
+  return false;
+}
+
+/**
+ * A retryable eval failure is one where the CLI itself did not finish cleanly
+ * AND the output matches a known transient pattern. A clean exit (code 0)
+ * with an empty or short response is also retryable — that indicates the CLI
+ * crashed before producing output.
+ */
+export function shouldRetryRun(response: string, exitCode: number | null): boolean {
+  // Clean exit: trust the run, never retry — even if the agent narrated errors.
+  if (exitCode === 0) return false;
+  // Non-zero exit with transient signature: retry.
+  if (isTransientError(response)) return true;
+  // Empty output from a crashed process: retry.
+  if ((response ?? "").trim().length < 50) return true;
   return false;
 }
 

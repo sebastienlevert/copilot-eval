@@ -66,14 +66,28 @@ export function shouldRetryRun(response: string, exitCode: number | null): boole
 
 /**
  * Check if a skill was invoked by looking for skill usage in the logs.
- * Matches both response format `skill(name)` and session log JSON format.
+ *
+ * Matches several shapes that appear across response text and session logs:
+ *   - `skill(name)` literal mention in the assistant response
+ *   - `"name": "skill"` JSON tool call (raw or backslash-escaped)
+ *   - `"skill_name": "..."` field that the CLI emits when a skill runs
+ *   - `"skill": "<name>"` argument shape used by the `skill` tool
+ *
+ * Session logs serialize JSON with backslash-escaped quotes (e.g.
+ * `\"name\":\"skill\"`), so the patterns must tolerate optional `\` before
+ * each quote. Without this, valid skill invocations would be missed and the
+ * eval would penalize tests that actually called the skill.
  */
 export function detectSkillUsage(sessionLog: string | null, response: string): boolean {
   const text = (sessionLog || "") + response;
   // Response format: skill(m365-agent-developer)
-  if (/skill\(.+\)/i.test(text)) return true;
-  // Session log JSON: "name": "skill"
-  if (/"name":\s*"skill"/.test(text)) return true;
+  if (/skill\([^)]+\)/i.test(text)) return true;
+  // Session log JSON (raw or escaped): "name": "skill"
+  if (/\\?"name\\?"\s*:\s*\\?"skill\\?"/.test(text)) return true;
+  // Session log JSON (raw or escaped): "skill_name": "..."
+  if (/\\?"skill_name\\?"\s*:\s*\\?"[^"\\]+\\?"/.test(text)) return true;
+  // Session log JSON (raw or escaped): "skill": "<some-skill>" (skill tool args)
+  if (/\\?"skill\\?"\s*:\s*\\?"[a-z][a-z0-9_-]*\\?"/i.test(text)) return true;
   return false;
 }
 

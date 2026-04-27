@@ -20,6 +20,9 @@ coverage/
 .env.*
 !.env.example
 
+# Package tarballs
+*.tgz
+
 # OS / editor files
 .DS_Store
 Thumbs.db

@@ -11,11 +11,19 @@ export function buildSummary(results: EvalRunResults): string {
   const failed = results.evals.filter((e) => e.judgment?.verdict === "fail").length;
   const skipped = results.evals.filter((e) => e.skipped).length;
   const errored = results.evals.filter((e) => e.error && !e.skipped).length;
-  const scored = total - skipped;
+  // Errored evals are infrastructure failures (transient CLI/API errors) and
+  // should not count against skill quality. Exclude them from the scored set
+  // alongside skipped evals.
+  const scored = total - skipped - errored;
   const avgScore =
     scored > 0
-      ? results.evals.reduce((sum, e) => sum + (e.judgment?.score ?? 0), 0) / scored
+      ? results.evals
+          .filter((e) => !e.skipped && !e.error)
+          .reduce((sum, e) => sum + (e.judgment?.score ?? 0), 0) / scored
       : 0;
+  const partialRun = skipped > 0 || errored > 0;
+  const scoredLabel = partialRun ? ` (${scored} scored)` : "";
+  const completedLabel = partialRun ? ` (of ${scored} completed)` : "";
 
   lines.push("\n" + "═".repeat(60));
   lines.push("  EVAL RESULTS");
@@ -34,7 +42,7 @@ export function buildSummary(results: EvalRunResults): string {
     `💥 Error: ${errored}` +
     (skipped > 0 ? `  ⏭️ Skipped: ${skipped}` : ""),
   );
-  lines.push(`  Average Score: ${avgScore.toFixed(1)}/100${skipped > 0 ? ` (${scored} scored)` : ""}`);
+  lines.push(`  Average Score: ${avgScore.toFixed(1)}/100${scoredLabel}`);
   lines.push("─".repeat(60));
 
   for (const [i, evalResult] of results.evals.entries()) {
@@ -81,8 +89,8 @@ export function buildSummary(results: EvalRunResults): string {
 
   const passRate = scored > 0 ? ((passed / scored) * 100).toFixed(1) : "0.0";
   const passPartialRate = scored > 0 ? (((passed + partial) / scored) * 100).toFixed(1) : "0.0";
-  lines.push(`  Pass Rate:          ${passRate}%${skipped > 0 ? ` (of ${scored} completed)` : ""}`);
-  lines.push(`  Pass+Partial Rate:  ${passPartialRate}%${skipped > 0 ? ` (of ${scored} completed)` : ""}`);
+  lines.push(`  Pass Rate:          ${passRate}%${completedLabel}`);
+  lines.push(`  Pass+Partial Rate:  ${passPartialRate}%${completedLabel}`);
   lines.push("═".repeat(60));
 
   return lines.join("\n");

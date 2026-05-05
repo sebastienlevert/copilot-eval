@@ -88,6 +88,8 @@ export function detectSkillUsage(sessionLog: string | null, response: string): b
   if (/\\?"skill_name\\?"\s*:\s*\\?"[^"\\]+\\?"/.test(text)) return true;
   // Session log JSON (raw or escaped): "skill": "<some-skill>" (skill tool args)
   if (/\\?"skill\\?"\s*:\s*\\?"[a-z][a-z0-9_-]*\\?"/i.test(text)) return true;
+  // Tool-call wrapper variants: "tool":"skill", "tool_name":"skill", "function":"skill"
+  if (/\\?"(?:tool|tool_name|function)\\?"\s*:\s*\\?"skill\\?"/.test(text)) return true;
   return false;
 }
 
@@ -148,6 +150,7 @@ export async function executeEval(
   onTurnComplete?: (turnIdx: number) => void,
   configDir?: string,
   pluginDirs?: string[],
+  agent?: string,
 ): Promise<SkillOutput> {
   const start = Date.now();
   const beforeExec = Date.now();
@@ -161,6 +164,7 @@ export async function executeEval(
     }
   }
   if (model) baseArgs.push("--model", model);
+  if (agent) baseArgs.push("--agent", agent);
 
   const prompts = turns.map((t) => t.prompt);
   const turnResponses: string[] = [];

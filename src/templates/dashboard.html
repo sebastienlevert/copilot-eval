@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Skill Eval Dashboard</title>
+<title>Copilot Eval</title>
+<link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230f6cbd' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='M9 12l2 2 4-4'/></svg>">
 <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/editor/editor.main.min.css">
 <script type="module" src="https://unpkg.com/@fluentui/web-components@2.6.1"></script>
 <script>
@@ -73,7 +74,7 @@
   body {
     font-family: 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
     background: var(--bg); color: var(--text);
-    padding: var(--spacingVerticalXL) var(--spacingHorizontalXL);
+    padding: 24px 32px;
     font-size: var(--fontSizeBase300); line-height: var(--lineHeightBase300);
     -webkit-font-smoothing: antialiased;
   }
@@ -106,7 +107,8 @@
   .table-wrap { border-radius: var(--borderRadiusMedium); overflow: hidden; background: var(--surface); border: 1px solid var(--border); }
   table { width: 100%; border-collapse: collapse; table-layout: fixed; }
   col.col-index { width: 56px; }
-  col.col-category { width: 180px; }
+  col.col-category { width: 160px; }
+  col.col-score { width: 64px; }
   col.col-verdict { width: 100px; }
   thead { position: sticky; top: 0; z-index: 1; }
   th { background: var(--surface2); text-align: left; padding: var(--spacingVerticalS) var(--spacingHorizontalL); font-size: var(--fontSizeBase100); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: var(--fontWeightSemibold); border-bottom: 2px solid var(--border); }
@@ -134,6 +136,116 @@
   .detail-panel h3.success-heading { color: var(--pass); }
   .detail-panel h3.failure-heading { color: var(--fail); }
   .detail-section { margin-bottom: var(--spacingVerticalL); }
+
+  /* Scoring breakdown card at top of each detail panel */
+  .scoring-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: var(--spacingHorizontalL);
+    margin-bottom: var(--spacingVerticalL);
+    background: linear-gradient(180deg, var(--cardBg) 0%, transparent 100%);
+  }
+  .scoring-final {
+    display: flex; align-items: center; gap: var(--spacingHorizontalL);
+    padding-bottom: var(--spacingVerticalM);
+    margin-bottom: var(--spacingVerticalM);
+    border-bottom: 1px solid var(--border);
+  }
+  .scoring-final .final-num {
+    font-size: 36px; font-weight: 700; line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .scoring-final .final-label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .scoring-final .formula {
+    color: var(--muted); font-size: 12px; font-family: ui-monospace,Consolas,monospace;
+    margin-left: auto;
+  }
+  .scoring-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacingHorizontalL);
+  }
+  @media (max-width: 720px) {
+    .scoring-grid { grid-template-columns: 1fr; }
+  }
+  .signal-card {
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: var(--spacingHorizontalM) var(--spacingHorizontalL);
+    background: var(--bg);
+  }
+  .signal-head {
+    display: flex; align-items: baseline; gap: 8px;
+    margin-bottom: var(--spacingVerticalS);
+  }
+  .signal-icon { font-size: 18px; }
+  .signal-title { font-weight: 600; font-size: 13px; }
+  .signal-meta { color: var(--muted); font-size: 11px; margin-left: auto; }
+  .signal-score { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .signal-score.pass { color: var(--pass); }
+  .signal-score.partial { color: var(--partial); }
+  .signal-score.fail { color: var(--fail); }
+  .signal-row {
+    display: flex; align-items: baseline; gap: 8px;
+    padding: 4px 0; font-size: 13px;
+  }
+  .signal-row .num { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .judge-reasoning {
+    margin-top: var(--spacingVerticalS);
+    padding: 8px 10px; border-left: 3px solid var(--accent);
+    background: var(--accent-bg, var(--cardBg));
+    border-radius: 0 4px 4px 0;
+    font-size: 12px; line-height: 1.5; color: var(--fg);
+    max-height: 80px; overflow: hidden;
+    position: relative; cursor: pointer;
+    padding-right: 130px;
+  }
+  .judge-reasoning.expanded { max-height: none; padding-right: 10px; padding-bottom: 28px; }
+  .judge-reasoning::after {
+    content: "▾ click to expand"; position: absolute;
+    bottom: 0; right: 0; padding: 4px 10px;
+    font-size: 10px; color: var(--muted);
+    background: linear-gradient(90deg, transparent, var(--cardBg) 30%);
+    pointer-events: none;
+  }
+  .judge-reasoning.expanded::after {
+    content: "▴ click to collapse";
+    background: linear-gradient(180deg, transparent, var(--cardBg) 60%);
+    left: 0; padding: 8px 10px 4px; text-align: right;
+  }
+  .assertion-detail-list {
+    margin: 0; padding: 0; list-style: none;
+    max-height: 220px; overflow-y: auto;
+  }
+  .assertion-detail-list li {
+    display: grid; grid-template-columns: 16px auto 1fr;
+    gap: 6px; align-items: baseline;
+    padding: 4px 0; font-size: 12px;
+    border-top: 1px solid var(--border);
+  }
+  .assertion-detail-list li:first-child { border-top: none; }
+  .assertion-detail-list .a-mark.pass { color: var(--pass); }
+  .assertion-detail-list .a-mark.fail { color: var(--fail); }
+  .assertion-detail-list .a-type {
+    font-family: ui-monospace,Consolas,monospace;
+    font-size: 11px; color: var(--accent);
+    background: var(--accent-bg, transparent);
+    padding: 1px 6px; border-radius: 3px;
+    white-space: nowrap;
+  }
+  .assertion-detail-list .a-reason {
+    color: var(--muted); overflow: hidden;
+    text-overflow: ellipsis; word-break: break-word;
+  }
+  .assertion-detail-list .a-reason.fail { color: var(--fail); }
+  .signal-empty {
+    color: var(--muted); font-style: italic; font-size: 12px;
+    padding: var(--spacingVerticalM) 0;
+  }
+  .verdict-pill {
+    display: inline-block; padding: 2px 10px; border-radius: 12px;
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+  }
+  .verdict-pill.pass { background: var(--pass); color: white; }
+  .verdict-pill.partial { background: var(--partial); color: white; }
+  .verdict-pill.fail { background: var(--fail); color: white; }
   .detail-section:last-child { margin-bottom: 0; }
   .detail-section ul { list-style: none; padding: 0; margin: 0; }
   .detail-section li { padding: 3px 0; font-size: var(--fontSizeBase300); }
@@ -189,7 +301,7 @@
 
   /* === Mobile card layout === */
   @media (max-width: 768px) {
-    body { padding: var(--spacingVerticalL) var(--spacingHorizontalL); }
+    body { padding: 16px; }
     h1 { font-size: var(--fontSizeBase400); }
     .cards { grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: var(--spacingHorizontalS); }
     fluent-card.stat-card { padding: var(--spacingVerticalM) var(--spacingHorizontalS); border-radius: var(--borderRadiusMedium); }
@@ -218,22 +330,119 @@
     .editor-instance { height: 280px; }
   }
 
+  /* === Brand & header === */
+  .brand-row { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+  .brand-mark { width: 28px; height: 28px; flex-shrink: 0; }
+  .back-link { display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--borderRadiusMedium); color: var(--text2); text-decoration: none; font-size: var(--fontSizeBase200); font-weight: var(--fontWeightSemibold); transition: background 0.15s, border-color 0.15s, color 0.15s; }
+  .back-link:hover { background: var(--colorSubtleBackgroundHover); border-color: var(--border-strong); color: var(--text); }
+  h1 { font-size: var(--fontSizeBase500); font-weight: var(--fontWeightSemibold); margin-bottom: var(--spacingVerticalXS); }
+  h1 .run-id { color: var(--muted); font-weight: var(--fontWeightRegular); margin-left: 8px; font-size: 1rem; }
+  .meta { color: var(--muted); font-size: var(--fontSizeBase200); margin-bottom: var(--spacingVerticalL); }
+
+  /* === Run metadata chip row === */
+  .run-meta-chips { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-bottom: var(--spacingVerticalL); font-size: var(--fontSizeBase200); }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 9999px; color: var(--text2); }
+  .chip .chip-key { color: var(--muted); font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: var(--fontWeightSemibold); }
+  .chip .chip-val { font-variant-numeric: tabular-nums; }
+  .chip code { font-family: 'Cascadia Code','SF Mono',Monaco,Consolas,monospace; font-size: 0.6875rem; }
+
+  /* === Compare dropdown & toolbar === */
+  .toolbar { display: flex; align-items: center; gap: var(--spacingHorizontalM); margin-bottom: var(--spacingVerticalL); flex-wrap: wrap; }
+  .toolbar input.search { flex: 1; min-width: 220px; max-width: 380px; height: 34px; padding: 0 12px 0 32px; border: 1px solid var(--border); border-radius: var(--borderRadiusMedium); background: var(--surface) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='gray' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='8'/><path d='m21 21-4.3-4.3'/></svg>") no-repeat 8px center; background-size: 16px; color: var(--text); font-size: var(--fontSizeBase300); }
+  .toolbar input.search:focus { outline: none; border-color: var(--colorBrandBackground); box-shadow: 0 0 0 1px var(--colorBrandBackground); }
+  .toolbar select.compare { height: 34px; padding: 0 28px 0 12px; border: 1px solid var(--border); border-radius: var(--borderRadiusMedium); background: var(--surface); color: var(--text); font-size: var(--fontSizeBase200); cursor: pointer; }
+
+  /* === KPI cards (headline number gets prominence) === */
+  .cards { display: grid; grid-template-columns: 1.6fr repeat(auto-fit, minmax(110px, 1fr)); gap: var(--spacingHorizontalM); margin-bottom: var(--spacingVerticalL); }
+  fluent-card.stat-card.kpi-headline .value { font-size: 2.5rem; }
+  fluent-card.stat-card.kpi-headline .label { font-size: 0.6875rem; }
+  fluent-card.stat-card .delta { font-size: var(--fontSizeBase200); margin-top: 4px; font-variant-numeric: tabular-nums; font-weight: var(--fontWeightSemibold); }
+  .delta.up { color: var(--pass); }
+  .delta.down { color: var(--fail); }
+  .delta.flat { color: var(--muted); }
+
+  /* === Histogram === */
+  .histogram { display: flex; align-items: flex-end; gap: 3px; height: 56px; padding: 0 4px; margin-bottom: var(--spacingVerticalL); background: var(--surface); border: 1px solid var(--border); border-radius: var(--borderRadiusMedium); padding: 8px; }
+  .hist-bar { flex: 1; background: var(--colorBrandBackground); border-radius: 2px 2px 0 0; min-height: 2px; position: relative; opacity: 0.85; transition: opacity 0.15s; }
+  .hist-bar:hover { opacity: 1; }
+  .hist-bar.zero { background: var(--fail); }
+  .hist-bar.low { background: var(--fail); }
+  .hist-bar.mid { background: var(--partial); }
+  .hist-bar.high { background: var(--pass); }
+  .hist-bar .hist-tooltip { position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 4px 6px; border-radius: 4px; font-size: 10px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 0.12s; }
+  .hist-bar:hover .hist-tooltip { opacity: 1; }
+
+  /* === Two-column overview: categories + assertions === */
+  .overview-grid { display: grid; grid-template-columns: 2fr 1fr; gap: var(--spacingHorizontalL); margin-bottom: var(--spacingVerticalL); }
+  @media (max-width: 900px) { .overview-grid { grid-template-columns: 1fr; } }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--borderRadiusMedium); padding: var(--spacingVerticalL) var(--spacingHorizontalL); }
+  .panel h2 { font-size: var(--fontSizeBase300); font-weight: var(--fontWeightSemibold); margin-bottom: var(--spacingVerticalM); display: flex; align-items: center; gap: 8px; }
+  .panel h2 .count { color: var(--muted); font-weight: var(--fontWeightRegular); font-size: var(--fontSizeBase200); }
+
+  .cat-table { width: 100%; border-collapse: collapse; font-size: var(--fontSizeBase200); font-variant-numeric: tabular-nums; }
+  .cat-table th { font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: var(--fontWeightSemibold); padding: 4px 8px; text-align: right; cursor: pointer; user-select: none; border-bottom: 1px solid var(--border); }
+  .cat-table th:first-child { text-align: left; }
+  .cat-table th.sorted { color: var(--colorBrandBackground); }
+  .cat-table th.sorted::after { content: ' ▾'; }
+  .cat-table th.sorted.asc::after { content: ' ▴'; }
+  .cat-table td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--border); }
+  .cat-table td:first-child { text-align: left; cursor: pointer; }
+  .cat-table tr.cat-row:hover td { background: var(--colorSubtleBackgroundHover); }
+  .cat-table tr.cat-row.active td { background: var(--colorSubtleBackgroundPressed); }
+  .cat-table .cat-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; min-width: 80px; background: var(--border); }
+  .cat-table .cat-bar > span { display: block; height: 100%; }
+  .cat-table .pct { color: var(--text2); }
+  .cat-table .pct.bad { color: var(--fail); font-weight: var(--fontWeightSemibold); }
+
+  .assertion-list { display: flex; flex-direction: column; gap: 6px; font-size: var(--fontSizeBase200); }
+  .assertion-row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; padding: 4px 0; }
+  .assertion-row .a-type { color: var(--text2); font-family: 'Cascadia Code','SF Mono',Monaco,Consolas,monospace; font-size: 0.75rem; }
+  .assertion-row .a-bar { height: 6px; min-width: 80px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .assertion-row .a-bar > span { display: block; height: 100%; background: var(--pass); }
+  .assertion-row .a-counts { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 60px; text-align: right; }
+  .assertion-row .a-counts .fail-count { color: var(--fail); font-weight: var(--fontWeightSemibold); }
+  .panel.empty-panel { color: var(--muted); font-style: italic; font-size: var(--fontSizeBase200); }
+
+  /* === Inline failure teaser in row === */
+  .row-teaser { display: block; font-size: var(--fontSizeBase200); color: var(--fail); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row-teaser.teaser-warn { color: var(--partial); }
+  .row-teaser .teaser-icon { display: inline-block; margin-right: 4px; }
+  td.cell-score { text-align: right; font-variant-numeric: tabular-nums; color: var(--text2); font-size: var(--fontSizeBase200); }
+
+  /* === Precision filter pill (special) === */
+  .filter-bar fluent-button[data-special="precision"]::part(control) { border-color: var(--partial); color: var(--partial); }
+  .filter-bar fluent-button[data-special="precision"][appearance="accent"]::part(control) { background: var(--partial); color: var(--accentButtonText); border-color: var(--partial); }
+
   @media (max-width: 480px) {
     .cards { grid-template-columns: repeat(3, 1fr); }
     fluent-card.stat-card .value { font-size: 1.125rem; }
+    fluent-card.stat-card.kpi-headline { grid-column: 1 / -1; }
   }
 </style>
 </head>
 <body>
 
 <div class="header-row">
-  <h1>🔬 Skill Eval Dashboard</h1>
+  <div class="brand-row">
+    <a href="/" class="back-link" id="back-link" title="Back to all runs" style="display:none">← All runs</a>
+    <svg class="brand-mark" viewBox="0 0 24 24" fill="none" stroke="#0f6cbd" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/></svg>
+    <h1>Copilot Eval<span class="run-id" id="run-id"></span></h1>
+  </div>
   <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme" title="Toggle light/dark theme">🌙</button>
 </div>
 <div class="meta" id="meta"></div>
+<div class="run-meta-chips" id="run-meta-chips"></div>
+
+<div class="toolbar">
+  <input type="search" class="search" id="search" placeholder="Search title, category, prompt…" aria-label="Search evals">
+  <select class="compare" id="compare" aria-label="Compare to another run">
+    <option value="">Compare to…</option>
+  </select>
+</div>
 
 <div class="cards" id="cards"></div>
 <div class="bar-container" id="bar"></div>
+
 <div class="filter-bar" id="filters"></div>
 <div class="filter-bar" id="cat-filters"></div>
 <div class="table-wrap">
@@ -242,6 +451,7 @@
     <col class="col-index">
     <col class="col-category">
     <col>
+    <col class="col-score">
     <col class="col-verdict">
   </colgroup>
   <thead>
@@ -249,6 +459,7 @@
       <th>#</th>
       <th>Category</th>
       <th>Title</th>
+      <th>Score</th>
       <th>Verdict</th>
     </tr>
   </thead>
@@ -258,6 +469,10 @@
 
 <script>
 async function loadData() {
+  const inline = document.getElementById('eval-data');
+  if (inline && inline.textContent && inline.textContent.trim()) {
+    return JSON.parse(inline.textContent);
+  }
   const jsonFile = location.pathname.replace(/\.html$/, '.json');
   const resp = await fetch(jsonFile);
   if (!resp.ok) throw new Error(`Failed to load ${jsonFile}: ${resp.status}`);
@@ -274,50 +489,172 @@ const htmlPath = decodeURIComponent(location.pathname);
 const baseDir = htmlPath.substring(0, htmlPath.lastIndexOf('/'));
 
 const evals = data.evals;
+
+// Helpers using composite finalScore (falls back to judge score)
+function scoreOf(e) {
+  if (e.skipped || e.error) return null;
+  const s = e.finalScore ?? e.judgment?.score;
+  return typeof s === 'number' ? s : null;
+}
+function verdictOf(e) {
+  if (e.skipped) return 'skipped';
+  if (e.error) return 'error';
+  const s = scoreOf(e);
+  if (s == null) return 'none';
+  if (s >= 90) return 'pass';
+  if (s >= 60) return 'partial';
+  return 'fail';
+}
+function isPrecisionCatch(e) {
+  // judge said pass but assertions caught a real issue
+  return e.assertions && e.assertions.total > 0 && e.assertions.passed < e.assertions.total
+    && (e.judgment?.score ?? 0) >= 90;
+}
+function teaserOf(e) {
+  if (e.error) return { text: 'Error: ' + e.error.split('\n')[0].slice(0, 140), warn: false };
+  if (e.assertions && e.assertions.results) {
+    const failed = e.assertions.results.find(r => !r.passed);
+    if (failed) {
+      const desc = failed.assertion?.type ? failed.assertion.type : 'assertion';
+      const reason = (failed.reason || '').slice(0, 100);
+      return { text: 'Assertion failed [' + desc + ']: ' + reason, warn: isPrecisionCatch(e) };
+    }
+  }
+  const missed = e.judgment?.criteria_missed || [];
+  if (missed.length) return { text: 'Missed: ' + missed[0].slice(0, 140), warn: false };
+  return null;
+}
+
 const total = evals.length;
-const pass = evals.filter(e => e.judgment?.verdict === 'pass').length;
-const partial = evals.filter(e => e.judgment?.verdict === 'partial').length;
-const fail = evals.filter(e => e.judgment?.verdict === 'fail').length;
 const skipped = evals.filter(e => e.skipped).length;
 const errored = evals.filter(e => e.error && !e.skipped).length;
 const scored = total - skipped - errored;
+const pass = evals.filter(e => verdictOf(e) === 'pass').length;
+const partial = evals.filter(e => verdictOf(e) === 'partial').length;
+const fail = evals.filter(e => verdictOf(e) === 'fail').length;
 const noJudge = scored - pass - partial - fail;
-const avgScore = scored ? (evals.filter(e => !e.skipped && !e.error).reduce((s, e) => s + (e.judgment?.score ?? 0), 0) / scored).toFixed(1) : '0';
-const passRate = scored ? ((pass / scored) * 100).toFixed(1) : '0';
+const precisionCatches = evals.filter(isPrecisionCatch).length;
+const avgScore = scored ? (evals.filter(e => scoreOf(e) != null).reduce((s, e) => s + scoreOf(e), 0) / scored) : 0;
+const passRate = scored ? ((pass / scored) * 100) : 0;
+const passPlusPartial = scored ? (((pass + partial) / scored) * 100) : 0;
 const isPartialRun = skipped > 0 || errored > 0;
 
-// Meta
-document.title = `Eval — ${data.timestamp}`;
+// === Run identifier & browser title ===
+const runId = data.runId || (data.timestamp ? data.timestamp.slice(0, 10) : '');
+if (runId) document.getElementById('run-id').textContent = '· ' + runId;
+if (location.protocol === 'http:' || location.protocol === 'https:') {
+  document.getElementById('back-link').style.display = 'inline-flex';
+}
+document.title = `Copilot Eval · ${runId || ''} · ${passRate.toFixed(0)}% pass`;
+
+// === Meta line ===
+const durMin = (data.totalDuration / 60000).toFixed(1);
 document.getElementById('meta').innerHTML =
-  `${escHtml(data.timestamp)} &middot; ${(data.totalDuration / 1000).toFixed(1)}s total` +
+  `${escHtml(data.timestamp)} &middot; ${durMin} min total &middot; ${total} eval${total === 1 ? '' : 's'}` +
+  (data.repeats > 1 ? ` &middot; ${data.repeats}× repeats` : '') +
   (isPartialRun ? ` &middot; <span style="color:var(--skipped)">⚠️ Partial run (interrupted)</span>` : '');
 
-// Cards
-document.getElementById('cards').innerHTML = [
-  { value: total, label: 'Total', filter: 'all' },
-  { value: pass, label: 'Passed', color: 'var(--pass)', filter: 'pass' },
-  { value: partial, label: 'Partial', color: 'var(--partial)', filter: 'partial' },
-  { value: fail, label: 'Failed', color: 'var(--fail)', filter: 'fail' },
-  { value: errored, label: 'Errors', color: 'var(--error)', filter: 'error' },
-  ...(skipped > 0 ? [{ value: skipped, label: 'Skipped', color: 'var(--skipped)', filter: 'skipped' }] : []),
-  { value: avgScore, label: 'Avg Score' },
-  { value: passRate + '%', label: `Pass Rate${isPartialRun ? ` (${scored})` : ''}` },
-].map(c => {
-  const clickable = c.filter ? ' clickable-card' + (c.filter === 'all' ? ' card-active' : '') : '';
-  const dataAttr = c.filter ? ` data-card-filter="${c.filter}"` : '';
-  return `<fluent-card class="stat-card${clickable}"${dataAttr}><div class="value" ${c.color ? 'style="color:' + c.color + '"' : ''}>${c.value}</div><div class="label">${c.label}</div></fluent-card>`;
+// === Reproducibility chips ===
+const meta = data.meta || {};
+const chipDefs = [
+  meta.model && { k: 'Model', v: meta.model, code: true },
+  meta.judgeModel && { k: 'Judge', v: meta.judgeModel, code: true },
+  meta.concurrency != null && { k: 'Concurrency', v: meta.concurrency },
+  data.repeats > 1 && { k: 'Repeats', v: data.repeats },
+  meta.cliVersion && { k: 'copilot-eval', v: 'v' + meta.cliVersion },
+  meta.nodeVersion && { k: 'Node', v: meta.nodeVersion },
+  meta.platform && { k: 'Platform', v: meta.platform, code: true },
+].filter(Boolean);
+document.getElementById('run-meta-chips').innerHTML = chipDefs.map(c => {
+  const v = c.code ? `<code class="chip-val">${escHtml(String(c.v))}</code>` : `<span class="chip-val">${escHtml(String(c.v))}</span>`;
+  return `<span class="chip"><span class="chip-key">${escHtml(c.k)}</span>${v}</span>`;
 }).join('');
 
-document.getElementById('cards').addEventListener('click', e => {
-  const card = e.target.closest('[data-card-filter]');
-  if (!card) return;
-  activeFilter = card.dataset.cardFilter;
-  document.querySelectorAll('#cards .clickable-card').forEach(c => c.classList.toggle('card-active', c.dataset.cardFilter === activeFilter));
-  document.querySelectorAll('#filters fluent-button').forEach(b => b.setAttribute('appearance', b.dataset.filter === activeFilter ? 'accent' : 'outline'));
-  renderTable();
-});
+// === Compare-to dropdown (works against /api/runs when served) ===
+let baselineRunId = null;
+let baselineSummary = null;
+async function loadCompareList() {
+  try {
+    const resp = await fetch('/api/runs');
+    if (!resp.ok) throw new Error('not served');
+    const runs = await resp.json();
+    const sel = document.getElementById('compare');
+    runs.filter(r => r.id !== runId).forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r.id;
+      const s = r.summary || {};
+      opt.textContent = `${r.id}  (${s.passRate ?? '-'}% pass, avg ${s.avg ?? '-'})`;
+      opt.dataset.summary = JSON.stringify(s);
+      sel.appendChild(opt);
+    });
+    sel.addEventListener('change', () => {
+      baselineRunId = sel.value || null;
+      const opt = sel.selectedOptions[0];
+      baselineSummary = opt && opt.dataset.summary ? JSON.parse(opt.dataset.summary) : null;
+      renderCards();
+    });
+  } catch {
+    // Not served by copilot-eval serve; hide compare control
+    document.getElementById('compare').style.display = 'none';
+  }
+}
+loadCompareList();
 
-// Bar
+// === KPI cards (pass-rate is headline) ===
+function fmtDelta(curr, prev, suffix = '', invert = false) {
+  if (prev == null || isNaN(prev)) return '';
+  const d = curr - prev;
+  if (Math.abs(d) < 0.05) return `<div class="delta flat">▬ no change vs ${baselineRunId}</div>`;
+  const up = invert ? d < 0 : d > 0;
+  const sign = d > 0 ? '+' : '';
+  return `<div class="delta ${up ? 'up' : 'down'}">${up ? '▲' : '▼'} ${sign}${d.toFixed(1)}${suffix} vs ${baselineRunId}</div>`;
+}
+function renderCards() {
+  const b = baselineSummary;
+  const cards = [
+    {
+      headline: true,
+      value: passRate.toFixed(1) + '%',
+      label: `Pass rate${isPartialRun ? ` (${scored})` : ''}`,
+      filter: 'pass',
+      delta: b ? fmtDelta(passRate, b.passRate, '%') : '',
+    },
+    { value: total, label: 'Total', filter: 'all' },
+    { value: pass, label: 'Passed', color: 'var(--pass)', filter: 'pass' },
+    { value: partial, label: 'Partial', color: 'var(--partial)', filter: 'partial' },
+    { value: fail, label: 'Failed', color: 'var(--fail)', filter: 'fail' },
+    ...(errored ? [{ value: errored, label: 'Errors', color: 'var(--error)', filter: 'error' }] : []),
+    ...(skipped ? [{ value: skipped, label: 'Skipped', color: 'var(--skipped)', filter: 'skipped' }] : []),
+    {
+      value: avgScore.toFixed(1),
+      label: 'Avg score',
+      delta: b ? fmtDelta(avgScore, b.avg) : '',
+    },
+    {
+      value: passPlusPartial.toFixed(1) + '%',
+      label: 'Pass + partial',
+      delta: b ? fmtDelta(passPlusPartial, b.passPlusPartialRate, '%') : '',
+    },
+    ...(precisionCatches > 0 ? [{
+      value: precisionCatches,
+      label: 'Assertion catches',
+      color: 'var(--partial)',
+      filter: 'precision',
+    }] : []),
+  ];
+  document.getElementById('cards').innerHTML = cards.map(c => {
+    const headline = c.headline ? ' kpi-headline' : '';
+    const clickable = c.filter ? ' clickable-card' + (c.filter === activeFilter ? ' card-active' : '') : '';
+    const dataAttr = c.filter ? ` data-card-filter="${c.filter}"` : '';
+    return `<fluent-card class="stat-card${headline}${clickable}"${dataAttr}>
+      <div class="value" ${c.color ? 'style="color:' + c.color + '"' : ''}>${c.value}</div>
+      <div class="label">${c.label}</div>
+      ${c.delta || ''}
+    </fluent-card>`;
+  }).join('');
+}
+
+// === Stacked bar ===
 const segments = [
   { count: pass, color: 'var(--pass)' },
   { count: partial, color: 'var(--partial)' },
@@ -331,65 +668,128 @@ document.getElementById('bar').innerHTML = segments
   .map(s => `<div class="bar-segment" style="width:${(s.count/total*100).toFixed(1)}%;background:${s.color}"></div>`)
   .join('');
 
-// Verdict filters
-const verdicts = ['all', 'pass', 'partial', 'fail', 'error', ...(skipped > 0 ? ['skipped'] : [])];
-document.getElementById('filters').innerHTML = `<span class="filter-label">Status</span>` + verdicts
-  .map(v => `<fluent-button appearance="${v === 'all' ? 'accent' : 'outline'}" data-filter="${v}">${v === 'all' ? 'All' : v.charAt(0).toUpperCase() + v.slice(1)}</fluent-button>`)
-  .join('');
-
+// === Verdict filters (incl. precision filter) ===
+const verdicts = ['all', 'pass', 'partial', 'fail', ...(errored ? ['error'] : []), ...(skipped ? ['skipped'] : [])];
 let activeFilter = 'all';
+function renderFilterBar() {
+  const buttons = verdicts.map(v => {
+    const label = v === 'all' ? 'All' : v.charAt(0).toUpperCase() + v.slice(1);
+    return `<fluent-button appearance="${v === activeFilter ? 'accent' : 'outline'}" data-filter="${v}">${label}</fluent-button>`;
+  }).join('') + (precisionCatches > 0
+    ? `<fluent-button appearance="${activeFilter === 'precision' ? 'accent' : 'outline'}" data-filter="precision" data-special="precision" title="Judge said pass but assertions caught issues">⚠ Assertion catches (${precisionCatches})</fluent-button>`
+    : '');
+  document.getElementById('filters').innerHTML = `<span class="filter-label">Status</span>` + buttons;
+}
+
+// === Category filters ===
+const categories = [...new Set(evals.map(e => e.category || 'Uncategorized'))].sort();
+let activeCat = 'all';
+function renderCatFilters() {
+  document.getElementById('cat-filters').innerHTML =
+    `<span class="filter-label">Category</span>` +
+    [`<fluent-button appearance="${activeCat === 'all' ? 'accent' : 'outline'}" data-cat="all">All</fluent-button>`]
+    .concat(categories.map(c =>
+      `<fluent-button appearance="${activeCat === c ? 'accent' : 'outline'}" data-cat="${escHtml(c)}">${escHtml(c)}</fluent-button>`))
+    .join('');
+}
+
+// === Search ===
+let searchText = '';
+
+// === URL hash sync ===
+function readHash() {
+  const h = location.hash.slice(1);
+  if (!h) return;
+  const params = new URLSearchParams(h);
+  if (params.get('filter')) activeFilter = params.get('filter');
+  if (params.get('cat')) activeCat = params.get('cat');
+  if (params.get('q')) {
+    searchText = params.get('q');
+    document.getElementById('search').value = searchText;
+  }
+}
+function writeHash() {
+  const params = new URLSearchParams();
+  if (activeFilter !== 'all') params.set('filter', activeFilter);
+  if (activeCat !== 'all') params.set('cat', activeCat);
+  if (searchText) params.set('q', searchText);
+  const newHash = params.toString();
+  history.replaceState(null, '', '#' + newHash);
+}
+readHash();
+
+renderCards();
+renderFilterBar();
+renderCatFilters();
+
+document.getElementById('cards').addEventListener('click', e => {
+  const card = e.target.closest('[data-card-filter]');
+  if (!card) return;
+  activeFilter = card.dataset.cardFilter;
+  syncFilterUI();
+});
 document.getElementById('filters').addEventListener('click', e => {
   const btn = e.target.closest('fluent-button[data-filter]');
   if (!btn) return;
   activeFilter = btn.dataset.filter;
-  document.querySelectorAll('#filters fluent-button').forEach(b => b.setAttribute('appearance', b.dataset.filter === activeFilter ? 'accent' : 'outline'));
-  document.querySelectorAll('#cards .clickable-card').forEach(c => c.classList.toggle('card-active', c.dataset.cardFilter === activeFilter));
-  renderTable();
+  syncFilterUI();
 });
-
-// Category filters
-const categories = [...new Set(evals.map(e => e.category || 'Uncategorized'))].sort();
-document.getElementById('cat-filters').innerHTML =
-  `<span class="filter-label">Category</span>` +
-  [`<fluent-button appearance="accent" data-cat="all">All</fluent-button>`]
-  .concat(categories.map(c => `<fluent-button appearance="outline" data-cat="${escHtml(c)}">${escHtml(c)}</fluent-button>`))
-  .join('');
-
-let activeCat = 'all';
 document.getElementById('cat-filters').addEventListener('click', e => {
   const btn = e.target.closest('fluent-button[data-cat]');
   if (!btn) return;
   activeCat = btn.dataset.cat;
-  document.querySelectorAll('#cat-filters fluent-button').forEach(b => b.setAttribute('appearance', b.dataset.cat === activeCat ? 'accent' : 'outline'));
+  syncFilterUI();
+});
+document.getElementById('search').addEventListener('input', e => {
+  searchText = e.target.value.toLowerCase();
+  writeHash();
   renderTable();
 });
 
-function getVerdict(ev) {
-  if (ev.skipped) return 'skipped';
-  if (ev.error) return 'error';
-  return ev.judgment?.verdict || 'none';
+function syncFilterUI() {
+  renderCards();
+  renderFilterBar();
+  renderCatFilters();
+  writeHash();
+  renderTable();
 }
+
+// (verdict helper kept for back-compat with detail panel code below)
+function getVerdict(ev) { return verdictOf(ev); }
+
 
 function groupCriteriaByTurn(criteria, turnCount) {
   const byTurn = {};
   const general = [];
-  const turnRe = /^Turn\s+(\d+):\s*/i;
+  // Strict prefix: "Turn N: ..." — strip the prefix when matched.
+  const prefixRe = /^Turn\s+(\d+)\s*[:\-]\s*/i;
+  // Loose mention: "...turn 2..." or "(turn 2)" or "[T2]" — keep text as-is.
+  const mentionRe = /\b(?:turn|t)\s*#?\s*(\d+)\b/i;
   for (const c of criteria) {
-    const m = c.match(turnRe);
-    if (m) {
-      const idx = parseInt(m[1], 10) - 1;
-      if (idx >= 0 && idx < turnCount) {
-        (byTurn[idx] = byTurn[idx] || []).push(c.replace(turnRe, ''));
-        continue;
-      }
+    let idx = -1;
+    let text = c;
+    const pm = c.match(prefixRe);
+    if (pm) {
+      idx = parseInt(pm[1], 10) - 1;
+      text = c.replace(prefixRe, '');
+    } else {
+      const mm = c.match(mentionRe);
+      if (mm) idx = parseInt(mm[1], 10) - 1;
     }
-    general.push(c);
+    if (idx >= 0 && idx < turnCount) {
+      (byTurn[idx] = byTurn[idx] || []).push(text);
+    } else {
+      general.push(c);
+    }
   }
   return { byTurn, general };
 }
 
 function buildDetailPanel(ev) {
   let html = `<div class="detail-panel">`;
+
+  // === Scoring breakdown — LLM judge vs assertions ===
+  html += buildScoringCard(ev);
 
   const turns = ev.turns || [];
   const met = ev.judgment?.criteria_met || [];
@@ -446,9 +846,6 @@ function buildDetailPanel(ev) {
       html += `<div class="detail-section"><h3 class="failure-heading">General Failures (${missedByTurn.general.length})</h3>`;
       html += `<ul>${missedByTurn.general.map(c => `<li class="missed">${escHtml(c)}</li>`).join('')}</ul></div>`;
     }
-    if (ev.judgment.reasoning) {
-      html += `<div class="detail-reasoning">${escHtml(ev.judgment.reasoning)}</div>`;
-    }
   }
 
   // Log viewer wrapped in collapsible accordion (collapsed by default)
@@ -470,26 +867,133 @@ function buildDetailPanel(ev) {
   return html;
 }
 
+function buildScoringCard(ev) {
+  if (ev.error) return '';
+  const judge = ev.judgment;
+  const a = ev.assertions;
+  const finalScore = ev.finalScore ?? judge?.score;
+  const verdict = verdictOf(ev);
+
+  const scoreClass = (s) => s == null ? '' : s >= 90 ? 'pass' : s >= 60 ? 'partial' : 'fail';
+
+  // Final headline
+  let formula = '';
+  if (judge && a && a.total > 0) {
+    const aPct = (a.passed / a.total) * 100;
+    formula = `judge ${judge.score} · assertions ${aPct.toFixed(0)}% (${a.passed}/${a.total})`;
+  } else if (judge) {
+    formula = `judge only`;
+  } else if (a && a.total > 0) {
+    formula = `assertions only (${a.passed}/${a.total})`;
+  }
+
+  let html = `<div class="scoring-card">`;
+  html += `<div class="scoring-final">
+    <div>
+      <div class="final-num ${scoreClass(finalScore)}">${finalScore != null ? finalScore.toFixed(0) : '—'}</div>
+      <div class="final-label">Final score</div>
+    </div>
+    <span class="verdict-pill ${verdict}">${verdict}</span>
+    <span class="formula">${escHtml(formula)}</span>
+  </div>`;
+
+  html += `<div class="scoring-grid">`;
+
+  // === LLM Judge card ===
+  html += `<div class="signal-card judge-card">`;
+  html += `<div class="signal-head">
+    <span class="signal-icon">🤖</span>
+    <span class="signal-title">LLM Judge</span>`;
+  if (data.meta?.judgeModel) html += `<span class="signal-meta">${escHtml(data.meta.judgeModel)}</span>`;
+  html += `</div>`;
+  if (judge) {
+    const jScore = judge.score;
+    const met = (judge.criteria_met || []).length;
+    const missed = (judge.criteria_missed || []).length;
+    html += `<div class="signal-row"><span class="signal-score ${scoreClass(jScore)}">${jScore != null ? jScore : '—'}</span><span style="color:var(--muted);font-size:11px">/ 100</span></div>`;
+    html += `<div class="signal-row" style="font-size:12px;color:var(--muted)">
+      <span style="color:var(--pass)">✓ ${met} met</span> ·
+      <span style="color:var(--fail)">✗ ${missed} missed</span>
+    </div>`;
+    if (judge.reasoning) {
+      html += `<div class="judge-reasoning" onclick="this.classList.toggle('expanded')">${escHtml(judge.reasoning)}</div>`;
+    }
+  } else {
+    html += `<div class="signal-empty">No judgment recorded.</div>`;
+  }
+  html += `</div>`;
+
+  // === Assertions card ===
+  html += `<div class="signal-card assert-card">`;
+  html += `<div class="signal-head">
+    <span class="signal-icon">⚙</span>
+    <span class="signal-title">Assertions</span>
+    <span class="signal-meta">deterministic</span>
+  </div>`;
+  if (a && a.total > 0) {
+    const aPct = (a.passed / a.total) * 100;
+    const aCls = a.passed === a.total ? 'pass' : a.passed === 0 ? 'fail' : 'partial';
+    html += `<div class="signal-row"><span class="signal-score ${aCls}">${a.passed}/${a.total}</span><span style="color:var(--muted);font-size:11px">passed (${aPct.toFixed(0)}%)</span></div>`;
+    if (a.results && a.results.length) {
+      html += `<ul class="assertion-detail-list">`;
+      // Show fails first, then passes
+      const sorted = [...a.results].sort((x, y) => (x.passed === y.passed) ? 0 : x.passed ? 1 : -1);
+      for (const r of sorted) {
+        const mark = r.passed ? '✓' : '✗';
+        const cls = r.passed ? 'pass' : 'fail';
+        const type = r.assertion?.type || 'unknown';
+        const reason = r.reason || (r.passed ? '' : 'failed');
+        html += `<li>
+          <span class="a-mark ${cls}">${mark}</span>
+          <span class="a-type">${escHtml(type)}</span>
+          <span class="a-reason ${r.passed ? '' : 'fail'}" title="${escHtml(reason)}">${escHtml(reason)}</span>
+        </li>`;
+      }
+      html += `</ul>`;
+    }
+  } else {
+    html += `<div class="signal-empty">No assertions defined for this eval. Add an <code>assertions:</code> block to the YAML for deterministic checks.</div>`;
+  }
+  html += `</div>`;
+
+  html += `</div></div>`;
+  return html;
+}
+
 function renderTable() {
   let filtered = evals;
-  if (activeFilter !== 'all') filtered = filtered.filter(e => getVerdict(e) === activeFilter);
+  if (activeFilter === 'precision') filtered = filtered.filter(isPrecisionCatch);
+  else if (activeFilter !== 'all') filtered = filtered.filter(e => verdictOf(e) === activeFilter);
   if (activeCat !== 'all') filtered = filtered.filter(e => (e.category || 'Uncategorized') === activeCat);
+  if (searchText) {
+    filtered = filtered.filter(e => {
+      const hay = (e.title + ' ' + (e.category || '') + ' ' + (e.turns || []).map(t => t.prompt).join(' ')).toLowerCase();
+      return hay.includes(searchText);
+    });
+  }
   document.getElementById('tbody').innerHTML = filtered.map(ev => {
-    const v = getVerdict(ev);
+    const v = verdictOf(ev);
     const badgeClass = 'badge-' + (v === 'none' ? 'error' : v);
-    const label = ev.skipped ? 'SKIPPED' : (ev.error ? 'ERROR' : (ev.judgment?.verdict?.toUpperCase() || 'N/A'));
+    const label = ev.skipped ? 'SKIPPED' : (ev.error ? 'ERROR' : v.toUpperCase());
     const title = escHtml(ev.title);
     const category = escHtml(ev.category || 'Uncategorized');
     const rowClass = ev.skipped ? 'clickable row-skipped' : 'clickable';
-
+    const score = scoreOf(ev);
+    const scoreCell = score != null ? score.toFixed(0) : '—';
+    const teaser = teaserOf(ev);
+    const teaserHtml = teaser
+      ? `<span class="row-teaser ${teaser.warn ? 'teaser-warn' : ''}"><span class="teaser-icon">${teaser.warn ? '⚠' : '✗'}</span>${escHtml(teaser.text)}</span>`
+      : '';
+    const aTag = ev.assertions ? ` <span style="color:var(--muted);font-size:0.7rem">[a:${ev.assertions.passed}/${ev.assertions.total}]</span>` : '';
     return `<tr class="${rowClass}" data-eval-index="${ev.index}">
       <td>${ev.index}</td>
       <td>${category}</td>
-      <td class="cell-title">${title}</td>
+      <td class="cell-title">${title}${aTag}${teaserHtml}</td>
+      <td class="cell-score">${scoreCell}</td>
       <td><fluent-badge class="${badgeClass}">${label}</fluent-badge></td>
     </tr>
     <tr class="detail-row hidden" id="detail-row-${ev.index}">
-      <td colspan="4">${ev.skipped ? '<div class="detail-panel"><p style="color:var(--skipped)">⏭️ This eval was skipped because the run was interrupted (Ctrl+C).</p></div>' : buildDetailPanel(ev)}</td>
+      <td colspan="5">${ev.skipped ? '<div class="detail-panel"><p style="color:var(--skipped)">⏭️ This eval was skipped because the run was interrupted (Ctrl+C).</p></div>' : buildDetailPanel(ev)}</td>
     </tr>`;
   }).join('');
 

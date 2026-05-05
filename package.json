@@ -26,11 +26,14 @@
   ],
   "author": "Sebastien Levert",
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "build": "tsc && cp -r src/templates dist/",
+    "build": "tsc -p tsconfig.build.json && node -e \"require('fs').cpSync('src/templates','dist/templates',{recursive:true})\"",
     "build:binary": "node scripts/build-binary.js",
     "test": "vitest run",
     "test:watch": "vitest",

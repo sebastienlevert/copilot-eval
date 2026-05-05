@@ -3,9 +3,11 @@ import { printSummary } from "./reporter.js";
 import type { EvalRunResults, EvalResult, Judgment } from "./types.js";
 
 function makeJudgment(overrides?: Partial<Judgment>): Judgment {
+  const verdict = overrides?.verdict ?? "pass";
+  const defaultScore = verdict === "pass" ? 95 : verdict === "partial" ? 70 : 20;
   return {
-    verdict: "pass",
-    score: 90,
+    verdict,
+    score: defaultScore,
     criteria_met: ["done"],
     criteria_missed: [],
     reasoning: "ok",

@@ -268,6 +268,8 @@ export interface ScriptVariables {
   workspaceId?: string;
   /** Absolute path to the workspace directory (per-eval only). Also available as {{workspacePath}}. */
   workspaceDir?: string;
+  /** Audience variance tag (e.g. "1p", "3p"). Available as {{variance}} and COPILOT_EVAL_VARIANCE. */
+  variance?: string;
 }
 
 /**
@@ -303,6 +305,7 @@ export async function runScript(
   if (vars.projectDir) env.COPILOT_EVAL_PROJECT_DIR = vars.projectDir;
   if (vars.workspaceId) env.COPILOT_EVAL_WORKSPACE_ID = vars.workspaceId;
   if (vars.workspaceDir) env.COPILOT_EVAL_WORKSPACE_DIR = vars.workspaceDir;
+  if (vars.variance) env.COPILOT_EVAL_VARIANCE = vars.variance;
 
   const isWindows = process.platform === "win32";
   const shell = isWindows ? "cmd" : "sh";

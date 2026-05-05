@@ -67,7 +67,7 @@ describe("generateDashboard", () => {
     const dir = await makeTempDir();
     await generateDashboard(dir, "test.html", makeResults());
     const html = await readFile(join(dir, "test.html"), "utf-8");
-    expect(html).toContain("Skill Eval Dashboard");
+    expect(html).toContain("Copilot Eval");
   });
 
   it("output contains a script tag", async () => {
